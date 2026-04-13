@@ -4,254 +4,266 @@ import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import "./Sweater3D.css";
 
-// ===== Вспомогательная: создать ExtrudeGeometry из 2D полигона =====
-function createExtrudedShape(points2D, depth = 0.3) {
-  if (!points2D || points2D.length < 3) return null;
+// ===== Создаём текстуру вязки с правильным UV =====
+function createKnitTexture(color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
   
-  const shape = new THREE.Shape();
-  shape.moveTo(points2D[0].x, points2D[0].y);
-  for (let i = 1; i < points2D.length; i++) {
-    shape.lineTo(points2D[i].x, points2D[i].y);
+  // Базовый цвет
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 256, 256);
+  
+  // Вертикальные "петли" (ряды вязки)
+  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  ctx.lineWidth = 2;
+  for (let y = 0; y < 256; y += 8) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(256, y);
+    ctx.stroke();
   }
-  shape.closePath();
-
-  const extrudeSettings = {
-    depth,
-    bevelEnabled: true,
-    bevelThickness: 0.03,
-    bevelSize: 0.03,
-    bevelSegments: 1,
-  };
-
-  return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  
+  // Горизонтальные "столбики"
+  for (let x = 0; x < 256; x += 6) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, 256);
+    ctx.stroke();
+  }
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(4, 6);
+  
+  return texture;
 }
 
-// ===== Детали свитера для РАЗМЕРА M (Raglan) =====
-function getRaglanShapesM() {
-  // Размер M: ОГ=94см, плотность 2.5 п/см → ~235 петель ширина спинки
-  // total_rows ~ 180 рядов (60см * 3.5 р/см + скосы)
-  // raglan_start_row_front ~ 50 рядов от подола
+// ===== Параметры для размера M =====
+const SIZE_M_PARAMS = {
+  bodyRadius: 0.85,      // радиус туловища
+  bodyHeight: 1.8,       // высота от подола до горловины
+  shoulderWidth: 0.95,   // ширина плеч
+  neckRadius: 0.18,      // радиус горловины
+  armholeY: 0.35,        // Y позиция проймы
+  armholeRadius: 0.28,   // радиус проймы
+  sleeveLength: 1.5,     // длина рукава
+  sleeveTopRadius: 0.22, // радиуc рукава у плеча
+  sleeveCuffRadius: 0.14,// радиус манжеты
+};
+
+// ===== Создаём геометрию тела с проймами =====
+function createBodyGeometry(isFront, params, sleeveType) {
+  const { bodyRadius, bodyHeight, shoulderWidth, neckRadius, armholeY, armholeRadius } = params;
   
-  const backShape = [
-    { x: -0.9, y: -0.85 },   // подол лево
-    { x: -0.9, y: 0.15 },    // бок лево до проймы
-    { x: -0.55, y: 0.35 },   // подмышка лево (сужение к реглану)
-    { x: -0.35, y: 0.55 },   // скос реглана лево
-    { x: -0.12, y: 0.72 },   // горловина лево
-    { x: 0, y: 0.68 },       // горловина центр (спинка чуть выше)
-    { x: 0.12, y: 0.72 },    // горловина право
-    { x: 0.35, y: 0.55 },    // скос реглана право
-    { x: 0.55, y: 0.35 },    // подмышка право
-    { x: 0.9, y: 0.15 },     // бок право
-    { x: 0.9, y: -0.85 },    // подол право
-  ];
-
-  const frontShape = [
-    { x: -0.9, y: -0.85 },
-    { x: -0.9, y: 0.15 },
-    { x: -0.55, y: 0.35 },
-    { x: -0.35, y: 0.55 },
-    { x: -0.12, y: 0.68 },
-    { x: 0, y: 0.35 },       // V-горловина переда (глубже)
-    { x: 0.12, y: 0.68 },
-    { x: 0.35, y: 0.55 },
-    { x: 0.55, y: 0.35 },
-    { x: 0.9, y: 0.15 },
-    { x: 0.9, y: -0.85 },
-  ];
-
-  // Рукав реглан
-  const sleeveShape = [
-    { x: -0.15, y: -0.75 },   // манжета лево
-    { x: -0.22, y: -0.25 },   // предплечье лево (расширение)
-    { x: -0.32, y: 0.25 },    // начало оката лево
-    { x: -0.25, y: 0.45 },    // окат лево
-    { x: 0, y: 0.55 },        // вершина оката
-    { x: 0.25, y: 0.45 },     // окат право
-    { x: 0.32, y: 0.25 },     // начало оката право
-    { x: 0.22, y: -0.25 },    // предплечье право
-    { x: 0.15, y: -0.75 },    // манжета право
-  ];
-
-  return { backShape, frontShape, sleeveShape };
+  // Используем CylinderGeometry с кастомными вершинами для формы тела
+  const segments = 32;
+  const height = bodyHeight;
+  const radiusTop = shoulderWidth / 2;
+  const radiusBottom = bodyRadius;
+  
+  // Создаём кастомную геометрию
+  const geometry = new THREE.CylinderGeometry(
+    radiusBottom,
+    radiusTop,
+    height,
+    segments,
+    1,
+    true // open ended - без крышек
+  );
+  
+  // Модифицируем вершины для создания пройм и горловины
+  const positions = geometry.attributes.position.array;
+  const uvs = geometry.attributes.uv.array;
+  
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+    
+    // Преобразуем Y из диапазона [-height/2, height/2] в [0, height]
+    const normalizedY = (y + height / 2) / height;
+    
+    // Горловина (вырез сверху)
+    if (normalizedY > 0.88) {
+      const distFromCenter = Math.sqrt(x * x + z * z);
+      const neckCutout = neckRadius * (1 + (normalizedY - 0.88) * 2);
+      
+      if (distFromCenter < neckCutout) {
+        // Смещаем вершины к краю горловины
+        const angle = Math.atan2(z, x);
+        const newX = Math.cos(angle) * neckCutout;
+        const newZ = Math.sin(angle) * neckCutout;
+        positions[i] = newX;
+        positions[i + 2] = newZ;
+      }
+      
+      // Для переда делаем горловину глубже
+      if (isFront && x > -neckRadius && x < neckRadius) {
+        positions[i + 1] = y - (neckRadius - Math.abs(x)) * 0.6;
+      }
+    }
+    
+    // Проймы (вырезы по бокам)
+    if (Math.abs(normalizedY - armholeY / height) < 0.15) {
+      const sideAngle = Math.atan2(z, x);
+      const isLeftSide = x < 0;
+      const targetAngle = isLeftSide ? Math.PI : 0;
+      
+      // Расстояние до центра проймы
+      const armholeCenterX = isLeftSide ? -shoulderWidth / 2 * 0.7 : shoulderWidth / 2 * 0.7;
+      const armholeCenterY = armholeY - height / 2;
+      
+      const dx = x - armholeCenterX;
+      const dy = y - armholeCenterY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < armholeRadius * 0.9) {
+        // Смещаем вершины к краю проймы
+        const angle = Math.atan2(dy, dx);
+        const newX = armholeCenterX + Math.cos(angle) * armholeRadius;
+        const newY = armholeCenterY + Math.sin(angle) * armholeRadius;
+        positions[i] = newX;
+        positions[i + 1] = newY;
+      }
+    }
+  }
+  
+  geometry.attributes.position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  
+  return geometry;
 }
 
-// ===== Детали свитера для РАЗМЕРА M (Set-In / Втачной рукав) =====
-function getSetInShapesM() {
-  // hem_width_stitches ~ 235, underarm_width_stitches ~ 215
-  // armhole_height_rows ~ 55 (от подреза до плеча)
-  // total_garment_rows ~ 210 (70см * 3.5 р/см)
-  // neck_width_stitches ~ 50, neck_depth_rows ~ 25
-  // sleeve_cuff_stitches ~ 50, sleeve_widest_stitches ~ 110
-  // sleeve_body_rows ~ 140, sleeve_cap_height_rows ~ 45
+// ===== Создаём геометрию рукава =====
+function createSleeveGeometry(params, sleeveType) {
+  const { sleeveLength, sleeveTopRadius, sleeveCuffRadius } = params;
   
-  const backShape = [
-    { x: -0.9, y: -0.9 },    // подол лево
-    { x: -0.9, y: 0.2 },     // бок лево (прямой до проймы)
-    { x: -0.82, y: 0.35 },   // пройма лево (убавки)
-    { x: -0.65, y: 0.55 },   // пройма лево верх
-    { x: -0.45, y: 0.68 },   // плечо лево (скос)
-    { x: -0.18, y: 0.78 },   // горловина лево
-    { x: 0, y: 0.75 },       // горловина центр спинки
-    { x: 0.18, y: 0.78 },    // горловина право
-    { x: 0.45, y: 0.68 },    // плечо право (скос)
-    { x: 0.65, y: 0.55 },    // пройма право верх
-    { x: 0.82, y: 0.35 },    // пройма право
-    { x: 0.9, y: 0.2 },      // бок право
-    { x: 0.9, y: -0.9 },     // подол право
-  ];
-
-  const frontShape = [
-    { x: -0.9, y: -0.9 },
-    { x: -0.9, y: 0.2 },
-    { x: -0.82, y: 0.35 },
-    { x: -0.65, y: 0.55 },
-    { x: -0.45, y: 0.68 },
-    { x: -0.18, y: 0.72 },   // горловина лево переда
-    { x: 0, y: 0.45 },       // V-горловина переда (глубже)
-    { x: 0.18, y: 0.72 },    // горловина право переда
-    { x: 0.45, y: 0.68 },
-    { x: 0.65, y: 0.55 },
-    { x: 0.82, y: 0.35 },
-    { x: 0.9, y: 0.2 },
-    { x: 0.9, y: -0.9 },
-  ];
-
-  // Втачной рукав с высоким окатом
-  const sleeveShape = [
-    { x: -0.12, y: -0.75 },   // манжета лево
-    { x: -0.18, y: -0.35 },   // предплечье лево
-    { x: -0.28, y: 0.05 },    // рукав до оката
-    { x: -0.35, y: 0.35 },    // окат лево (крутой)
-    { x: -0.22, y: 0.55 },    // окат лево верх
-    { x: 0, y: 0.62 },        // вершина оката
-    { x: 0.22, y: 0.55 },     // окат право верх
-    { x: 0.35, y: 0.35 },     // окат право
-    { x: 0.28, y: 0.05 },     // рукав до оката право
-    { x: 0.18, y: -0.35 },    // предплечье право
-    { x: 0.12, y: -0.75 },    // манжета право
-  ];
-
-  return { backShape, frontShape, sleeveShape };
+  // Конусообразный рукав
+  const segments = 24;
+  const geometry = new THREE.CylinderGeometry(
+    sleeveCuffRadius,
+    sleeveTopRadius,
+    sleeveLength,
+    segments,
+    1,
+    true
+  );
+  
+  // Изгибаем рукав для естественной формы
+  const positions = geometry.attributes.position.array;
+  
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+    
+    // Нормализуем Y от -1 (манжета) до 1 (плечо)
+    const normalizedY = (y + sleeveLength / 2) / sleeveLength;
+    
+    // Небольшой изгиб в локте
+    if (normalizedY > 0.3 && normalizedY < 0.7) {
+      const bendAmount = Math.sin((normalizedY - 0.3) * Math.PI / 0.4) * 0.08;
+      positions[i] = x + bendAmount * Math.sign(x);
+    }
+    
+    // Окат рукава (верхняя часть)
+    if (normalizedY > 0.85) {
+      const capShape = Math.sin((normalizedY - 0.85) / 0.15 * Math.PI / 2);
+      const expansion = capShape * 0.12;
+      const angle = Math.atan2(z, x);
+      positions[i] = x + Math.cos(angle) * expansion;
+      positions[i + 2] = z + Math.sin(angle) * expansion;
+    }
+  }
+  
+  geometry.attributes.position.needsUpdate = true;
+  geometry.computeVertexNormals();
+  
+  return geometry;
 }
 
 // ===== Компонент СШИТОГО свитера =====
 function SewnSweater({ calculation, sleeveType }) {
   const groupRef = useRef();
+  
+  const isSetIn = sleeveType === "set_in" && calculation?.type === "set_in";
+  
+  // Параметры для разных типов рукавов
+  const params = {
+    ...SIZE_M_PARAMS,
+    armholeRadius: isSetIn ? 0.26 : 0.32, // Втачной имеет меньшую пройму
+    sleeveTopRadius: isSetIn ? 0.20 : 0.24,
+    sleeveLength: isSetIn ? 1.4 : 1.5,
+  };
 
-  useFrame((state, delta) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.2;
-    }
-  });
+  const { backGeom, frontGeom, leftSleeveGeom, rightSleeveGeom } = useMemo(() => {
+    const backGeom = createBodyGeometry(false, params, sleeveType);
+    const frontGeom = createBodyGeometry(true, params, sleeveType);
+    const sleeveGeom = createSleeveGeometry(params, sleeveType);
+    
+    return {
+      backGeom,
+      frontGeom,
+      leftSleeveGeom: sleeveGeom,
+      rightSleeveGeom: sleeveGeom.clone(),
+    };
+  }, [params, sleeveType]);
 
-  const { backGeom, frontGeom, sleeveGeom } = useMemo(() => {
-    let shapes;
-    if (sleeveType === "set_in" && calculation?.type === "set_in") {
-      shapes = getSetInShapesM();
-    } else {
-      shapes = getRaglanShapesM();
-    }
-    const { backShape, frontShape, sleeveShape } = shapes;
-
-    const backGeom = createExtrudedShape(backShape, 0.15);
-    const frontGeom = createExtrudedShape(frontShape, 0.15);
-    const sleeveGeom = createExtrudedShape(sleeveShape, 0.1);
-
-    return { backGeom, frontGeom, sleeveGeom };
-  }, [calculation, sleeveType]);
-
-  // Цвет пряжи из мерок (если есть)
+  // Цвет пряжи из мерок
   const yarnColor = calculation?.yarn_color || "#4A90D9";
+  const knitTexture = useMemo(() => createKnitTexture(yarnColor), [yarnColor]);
+
+  const material = useMemo(() => (
+    <meshStandardMaterial
+      map={knitTexture}
+      color={yarnColor}
+      roughness={0.8}
+      metalness={0.02}
+      side={THREE.DoubleSide}
+    />
+  ), [knitTexture, yarnColor]);
+
+  // Позиции пройм для установки рукавов
+  const armholeY = params.armholeY - params.bodyHeight / 2;
+  const shoulderX = params.shoulderWidth / 2 * 0.75;
 
   return (
-    <group ref={groupRef} scale={1.5}>
-      {/* Спинка (сзади, z < 0) */}
-      {backGeom && (
-        <mesh geometry={backGeom} position={[0, 0, -0.2]}>
-          <meshStandardMaterial
-            color={yarnColor}
-            roughness={0.75}
-            metalness={0.05}
-          />
-        </mesh>
-      )}
-
-      {/* Перед (спереди, z > 0) */}
-      {frontGeom && (
-        <mesh geometry={frontGeom} position={[0, 0, 0.2]}>
-          <meshStandardMaterial
-            color={yarnColor}
-            roughness={0.75}
-            metalness={0.05}
-          />
-        </mesh>
-      )}
-
-      {/* Левый рукав (свёрнут по пройме) */}
-      {sleeveGeom && (
-        <mesh
-          geometry={sleeveGeom}
-          position={[-0.75, 0.1, 0]}
-          rotation={[0, 0, 0.35]}
-        >
-          <meshStandardMaterial
-            color={yarnColor}
-            roughness={0.75}
-            metalness={0.05}
-          />
-        </mesh>
-      )}
-
-      {/* Правый рукав (свёрнут по пройме) */}
-      {sleeveGeom && (
-        <mesh
-          geometry={sleeveGeom.clone()}
-          position={[0.75, 0.1, 0]}
-          rotation={[0, 0, -0.35]}
-        >
-          <meshStandardMaterial
-            color={yarnColor}
-            roughness={0.75}
-            metalness={0.05}
-          />
-        </mesh>
-      )}
-
-      {/* Боковые швы */}
-      <lineSegments>
-        <bufferGeometry>
-          <float32BufferAttribute
-            attach="attributes-position"
-            count={4}
-            array={new Float32Array([
-              -0.9 * 1.5, -0.85 * 1.5, -0.15,
-              -0.9 * 1.5, 0.55 * 1.5, 0.15,
-              0.9 * 1.5, -0.85 * 1.5, -0.15,
-              0.9 * 1.5, 0.55 * 1.5, 0.15,
-            ])}
-            itemSize={3}
-          />
-        </bufferGeometry>
-        <lineBasicMaterial color="#f1c40f" transparent opacity={0.7} />
-      </lineSegments>
-
-      {/* Швы рукавов */}
-      <lineSegments>
-        <bufferGeometry>
-          <float32BufferAttribute
-            attach="attributes-position"
-            count={4}
-            array={new Float32Array([
-              -0.55 * 1.5, 0.35 * 1.5, 0,
-              -0.75 * 1.5, 0.4 * 1.5, 0.1,
-              0.55 * 1.5, 0.35 * 1.5, 0,
-              0.75 * 1.5, 0.4 * 1.5, 0.1,
-            ])}
-            itemSize={3}
-          />
-        </bufferGeometry>
-        <lineBasicMaterial color="#f1c40f" transparent opacity={0.7} />
+    <group ref={groupRef} scale={1.0}>
+      {/* Спинка */}
+      <mesh geometry={backGeom} rotation={[0, Math.PI, 0]}>
+        {material}
+      </mesh>
+      
+      {/* Перед */}
+      <mesh geometry={frontGeom}>
+        {material}
+      </mesh>
+      
+      {/* Левый рукав - вставлен в пройму */}
+      <mesh
+        geometry={leftSleeveGeom}
+        position={[-shoulderX, armholeY + 0.15, 0]}
+        rotation={[0, 0, 0.4]}
+      >
+        {material}
+      </mesh>
+      
+      {/* Правый рукав - вставлен в пройму */}
+      <mesh
+        geometry={rightSleeveGeom}
+        position={[shoulderX, armholeY + 0.15, 0]}
+        rotation={[0, 0, -0.4]}
+      >
+        {material}
+      </mesh>
+      
+      {/* Декоративные швы (опционально) */}
+      <lineSegments position={[0, 0, 0.01]}>
+        <edgesGeometry args={[frontGeom]} />
+        <lineBasicMaterial color="#ffffff" transparent opacity={0.3} />
       </lineSegments>
     </group>
   );
