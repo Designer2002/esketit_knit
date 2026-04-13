@@ -1,0 +1,111 @@
+-- === НАПОЛНЕНИЕ ДАННЫМИ: КАТЕГОРИИ ===
+INSERT OR IGNORE INTO garment_categories (code, name, description, body_region, has_symmetry, default_unit) VALUES
+('top', 'Верхняя одежда', 'Изделия для верхней части тела: свитера, футболки, кардиганы', 'upper', 1, 'cm'),
+('bottom', 'Нижняя одежда', 'Изделия для нижней части тела: брюки, юбки, шорты', 'lower', 1, 'cm'),
+('full', 'Комбинезоны', 'Цельные изделия, покрывающие верх и низ', 'full', 1, 'cm'),
+('accessory', 'Аксессуары', 'Шапки, шарфы, варежки, носки', 'accessory', 1, 'cm');
+
+-- === НАПОЛНЕНИЕ ДАННЫМИ: ТИПЫ ИЗДЕЛИЙ ===
+-- Категория: Верхняя одежда (category_id = 1)
+INSERT OR IGNORE INTO garment_types (category_id, name, base_measurements, included_parts, default_config, construction_formulas) VALUES
+(1, 'Классический свитер', 
+ '{"chest_circumference": 100, "waist_circumference": 90, "hip_circumference": 95, "shoulder_width": 45, "back_waist_length": 42, "sleeve_length": 60, "neck_circumference": 38}',
+ '["front", "back", "sleeve_left", "sleeve_right", "collar"]',
+ '{"neck_depth_front": 8, "neck_depth_back": 2, "sleeve_cap_height": 15, "ease_chest": 10}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "back_width": "chest_circumference / 4 + ease_chest / 4", "sleeve_width": "arm_circumference / 2 + 5"}'),
+
+(1, 'Свитер оверсайз', 
+ '{"chest_circumference": 120, "waist_circumference": 115, "hip_circumference": 120, "shoulder_width": 55, "back_waist_length": 45, "sleeve_length": 58, "neck_circumference": 40}',
+ '["front", "back", "sleeve_left", "sleeve_right", "collar"]',
+ '{"neck_depth_front": 10, "neck_depth_back": 3, "sleeve_cap_height": 12, "ease_chest": 25}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "back_width": "chest_circumference / 4 + ease_chest / 4"}'),
+
+(1, 'Водолазка', 
+ '{"chest_circumference": 90, "waist_circumference": 80, "hip_circumference": 90, "shoulder_width": 40, "back_waist_length": 40, "sleeve_length": 62, "neck_circumference": 36}',
+ '["front", "back", "sleeve_left", "sleeve_right", "turtleneck"]',
+ '{"neck_depth_front": 20, "neck_depth_back": 2, "turtleneck_height": 25, "ease_chest": 6}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "turtleneck_width": "neck_circumference / 2"}'),
+
+(1, 'Лонгслив базовый', 
+ '{"chest_circumference": 95, "waist_circumference": 85, "hip_circumference": 95, "shoulder_width": 42, "back_waist_length": 43, "sleeve_length": 61, "neck_circumference": 37}',
+ '["front", "back", "sleeve_left", "sleeve_right"]',
+ '{"neck_depth_front": 12, "neck_depth_back": 2, "hem_height": 4, "ease_chest": 8}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "hem_width": "chest_circumference / 4 + ease_chest / 4 - 2"}'),
+
+(1, 'Футболка классическая', 
+ '{"chest_circumference": 100, "waist_circumference": 95, "hip_circumference": 100, "shoulder_width": 44, "back_waist_length": 42, "sleeve_length": 22, "neck_circumference": 38}',
+ '["front", "back", "sleeve_left", "sleeve_right", "neckband"]',
+ '{"neck_depth_front": 10, "neck_depth_back": 2, "sleeve_length_short": 22, "ease_chest": 10}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "neckband_width": "neck_circumference * 0.9"}'),
+
+(1, 'Кардиган на пуговицах', 
+ '{"chest_circumference": 105, "waist_circumference": 100, "hip_circumference": 105, "shoulder_width": 46, "back_waist_length": 44, "sleeve_length": 60, "neck_circumference": 39}',
+ '["front_left", "front_right", "back", "sleeve_left", "sleeve_right", "collar", "button_band"]',
+ '{"neck_depth_front": 15, "neck_depth_back": 2, "button_spacing": 5, "ease_chest": 12}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4 - 2", "button_band_width": 4}'),
+
+(1, 'Жилет вязаный', 
+ '{"chest_circumference": 100, "waist_circumference": 95, "hip_circumference": 100, "shoulder_width": 40, "back_waist_length": 45, "armhole_depth": 22, "neck_circumference": 38}',
+ '["front", "back", "armhole_band", "neckband"]',
+ '{"neck_depth_front": 18, "neck_depth_back": 3, "armhole_depth": 22, "ease_chest": 8}',
+ '{"front_width": "chest_circumference / 4 + ease_chest / 4", "armhole_band_width": 3}');
+
+-- Категория: Нижняя одежда (category_id = 2)
+INSERT OR IGNORE INTO garment_types (category_id, name, base_measurements, included_parts, default_config, construction_formulas) VALUES
+(2, 'Брюки классические', 
+ '{"waist_circumference": 80, "hip_circumference": 100, "thigh_circumference": 55, "knee_circumference": 40, "ankle_circumference": 24, "rise_front": 26, "rise_back": 34, "inseam": 78}',
+ '["front_left", "front_right", "back_left", "back_right", "waistband", "pocket_front", "pocket_back"]',
+ '{"waistband_height": 4, "pocket_depth": 14, "ease_waist": 2, "ease_hip": 6}',
+ '{"front_width": "hip_circumference / 4 + ease_hip / 4 - 2", "back_width": "hip_circumference / 4 + ease_hip / 4 + 2"}'),
+
+(2, 'Юбка прямая', 
+ '{"waist_circumference": 75, "hip_circumference": 100, "hip_depth": 20, "length_total": 60}',
+ '["front", "back", "waistband", "vent_back"]',
+ '{"waistband_height": 4, "vent_height": 20, "ease_waist": 2, "ease_hip": 4}',
+ '{"front_width": "hip_circumference / 4 + ease_hip / 4", "back_width": "hip_circumference / 4 + ease_hip / 4"}'),
+
+(2, 'Юбка А-силуэта', 
+ '{"waist_circumference": 75, "hip_circumference": 100, "hip_depth": 20, "length_total": 55, "hem_circumference": 140}',
+ '["front_panel_1", "front_panel_2", "back_panel_1", "back_panel_2", "waistband"]',
+ '{"waistband_height": 3, "panel_count": 4, "ease_waist": 2}',
+ '{"panel_top_width": "waist_circumference / panel_count + ease_waist / panel_count", "panel_bottom_width": "hem_circumference / panel_count"}'),
+
+(2, 'Шорты летние', 
+ '{"waist_circumference": 78, "hip_circumference": 98, "thigh_circumference": 54, "rise_front": 24, "rise_back": 32, "inseam": 12}',
+ '["front_left", "front_right", "back_left", "back_right", "waistband"]',
+ '{"waistband_height": 3, "ease_waist": 2, "ease_hip": 6, "hem_finish": "folded"}',
+ '{"front_width": "hip_circumference / 4 + ease_hip / 4 - 2", "back_width": "hip_circumference / 4 + ease_hip / 4 + 2"}');
+
+-- Категория: Комбинезоны (category_id = 3)
+INSERT OR IGNORE INTO garment_types (category_id, name, base_measurements, included_parts, default_config, construction_formulas) VALUES
+(3, 'Комбинезон вязаный', 
+ '{"chest_circumference": 100, "waist_circumference": 85, "hip_circumference": 100, "shoulder_width": 44, "back_waist_length": 42, "rise_front": 28, "rise_back": 36, "inseam": 75, "sleeve_length": 60}',
+ '["front_top", "back_top", "front_bottom", "back_bottom", "sleeve_left", "sleeve_right", "waist_join"]',
+ '{"neck_depth_front": 10, "neck_depth_back": 2, "ease_chest": 10, "ease_waist": 4, "ease_hip": 6}',
+ '{"top_front_width": "chest_circumference / 4 + ease_chest / 4", "bottom_front_width": "hip_circumference / 4 + ease_hip / 4"}');
+
+-- Категория: Аксессуары (category_id = 4)
+INSERT OR IGNORE INTO garment_types (category_id, name, base_measurements, included_parts, default_config, construction_formulas) VALUES
+(4, 'Шапка бини', 
+ '{"head_circumference": 56, "head_depth": 32, "brim_height": 5}',
+ '["crown", "brim"]',
+ '{"brim_stitch": "rib_2x2", "crown_decrease": "even", "ease_head": -2}',
+ '{"brim_width": "head_circumference + ease_head", "crown_circumference": "head_circumference + ease_head"}'),
+
+(4, 'Шарф прямоугольный', 
+ '{"length_total": 180, "width_total": 25}',
+ '["main_panel"]',
+ '{"edge_finish": "garter", "fringe_length": 10}',
+ '{"main_width": "width_total", "main_length": "length_total"}'),
+
+(4, 'Варежки парные', 
+ '{"hand_circumference": 20, "hand_length": 18, "thumb_circumference": 8, "thumb_length": 6}',
+ '["palm", "back", "thumb", "cuff"]',
+ '{"cuff_height": 5, "cuff_stitch": "rib_1x1", "ease_hand": 2}',
+ '{"palm_width": "hand_circumference / 2 + ease_hand / 2", "thumb_position": "hand_length * 0.4"}'),
+
+(4, 'Носки классические', 
+ '{"ankle_circumference": 22, "calf_circumference": 35, "foot_length": 25, "heel_depth": 6}',
+ '["cuff", "leg", "heel_flap", "heel_turn", "foot", "toe"]',
+ '{"cuff_height": 8, "cuff_stitch": "rib_2x2", "toe_shape": "rounded"}',
+ '{"cuff_width": "calf_circumference * 0.9", "foot_width": "ankle_circumference / 2 + 2"}');

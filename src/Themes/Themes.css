@@ -1,0 +1,180 @@
+/* ===== EsketitKnit Themes — Unified ===== */
+
+/* Базовые переменные (fallback) */
+:root {
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
+  --text-color: #e0e7ff;
+  --btn-bg: #1e40af;
+  --btn-hover-bg: #1e3a8a;
+  --btn-text: #e0e7ff;
+  --select-bg: rgba(15, 23, 42, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgba(255, 255, 255, 0.15);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --dropdown-bg: #000919;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #1e40af;
+  --dropdown-description-color: #2556ac;
+  --modal-card-background: rgba(26, 42, 82, 0.6);
+  --modal-card-recent-projects-background: rgba(26, 42, 82, 0.6);
+  --background: rgba(26, 42, 82, 0.6);
+}
+
+/* ===== Ночь (dark-blue) ===== */
+.dark-blue {
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
+  --text-color: #e0e7ff;
+  --text-light-color: #b7eeff;
+  --text-light-color-second: #9c94e3;
+  --btn-bg: #1e40af;
+  --btn-hover-bg: #1e3a8a;
+  --btn-text: #e0e7ff;
+  --select-bg: rgba(15, 23, 42, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgba(255, 255, 255, 0.15);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --dropdown-bg: #000919;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #1e40af;
+  --dropdown-description-color: #2556ac;
+  --modal-card-background: rgba(26, 42, 82, 0.6);
+  --modal-card-recent-projects-background: rgba(26, 42, 82, 0.6);
+  --background: rgba(26, 42, 82, 0.6);
+}
+
+/* ===== Закат (dark-pink) ===== */
+.dark-pink {
+  --bg-gradient: linear-gradient(135deg, #120a0e 0%, #be185d 100%);
+  --text-color: #fce7f3;
+  --text-light-color: #b381ab;
+  --text-light-color-second: #ec7d7b;
+  --btn-bg: #be185d;
+  --btn-hover-bg: #9d174d;
+  --btn-text: #fce7f3;
+  --select-bg: rgba(30, 41, 59, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgba(255, 255, 255, 0.15);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --dropdown-bg: #4b1031;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #be185d;
+  --dropdown-description-color: #de8cd6;
+  --modal-card-background: rgba(113, 52, 81, 0.6);
+  --modal-card-recent-projects-background: rgba(113, 52, 81, 0.6);
+  --background: rgba(113, 52, 81, 0.6);
+}
+
+/* ===== Рассвет (light-orange) ===== */
+.light-orange {
+  --bg-gradient: linear-gradient(135deg, #fed7aa 0%, #fef3c7 100%);
+  --text-color: #5f370e;
+  --text-light-color: #cd8f58;
+  --text-light-color-second: #ecdd7b;
+  --text-light-color-third: #ca8b73;
+  --btn-bg: #fb923c;
+  --btn-hover-bg: #f97316;
+  --btn-text: #5f370e;
+  --select-bg: rgba(255, 247, 237, 0.75);
+  --panel-bg: rgba(255, 255, 255, 0.35);
+  --panel-bg-strong: rgba(255, 255, 255, 0.5);
+  --scroll-bg: rgba(255, 255, 255, 0.4);
+  --dropdown-bg: #fcd34d;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #b45309;
+  --dropdown-description-color: #92400e;
+  --modal-card-background: rgba(255, 133, 89, 0.569);
+  --modal-card-recent-projects-background: rgba(255, 133, 89, 0.569);
+  --background: rgba(255, 133, 89, 0.569);
+}
+
+/* ===== День (light-green) ===== */
+.light-green {
+  --bg-gradient: linear-gradient(135deg, #bbf7d0 0%, #d1fae5 100%);
+  --text-color: #064e3b;
+  --text-light-color: #4aad84;
+  --text-light-color-second: #acec7b;
+  --text-light-color-third: #baf2d7;
+  --btn-bg: #22c55e;
+  --btn-hover-bg: #16a34a;
+  --btn-text: #064e3b;
+  --select-bg: rgba(220, 252, 231, 0.75);
+  --panel-bg: rgba(255, 255, 255, 0.35);
+  --panel-bg-strong: rgba(255, 255, 255, 0.5);
+  --scroll-bg: rgba(255, 255, 255, 0.4);
+  --dropdown-bg: #34d399;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #065f46;
+  --dropdown-description-color: #064e3b;
+  --modal-card-background: rgba(103, 194, 115, 0.6);
+  --modal-card-recent-projects-background: rgba(103, 194, 115, 0.6);
+  --background: rgba(103, 194, 115, 0.6);
+}
+
+/* ===== Мрак (mrak) ===== */
+.mrak {
+  --bg-gradient: linear-gradient(135deg, #150f16 0%, #374652 50%, #5b3d3d 100%);
+  --text-color: #e9ded8;
+  --text-light-color: #9eb4ba;
+  --text-light-color-second: #ba1f1f;
+  --text-light-color-third: #5b3d3d;
+  --btn-bg: #ba1f1f;
+  --btn-hover-bg: #8b1515;
+  --btn-text: #e9ded8;
+  --select-bg: rgba(21, 15, 22, 0.9);
+  --panel-bg: rgba(55, 70, 82, 0.4);
+  --panel-bg-strong: rgba(91, 61, 61, 0.6);
+  --scroll-bg: rgba(91, 61, 61, 0.5);
+  --dropdown-bg: #150f16;
+  --dropdown-hover-bg: #5b3d3d;
+  --dropdown-hover-text: #e9ded8;
+  --dropdown-description-color: #9eb4ba;
+  --modal-card-background: rgba(21, 15, 22, 0.85);
+  --modal-card-recent-projects-background: rgba(21, 15, 22, 0.85);
+  --background: rgba(21, 15, 22, 0.85);
+}
+
+/* ===== Мистика (mystika) ===== */
+.mystika {
+  --bg-gradient: linear-gradient(135deg, #100a18 0%, #311b50 40%, #472970 70%, #924bef 100%);
+  --text-color: #e9ded8;
+  --text-light-color: #6d538f;
+  --text-light-color-second: #62cf85;
+  --text-light-color-third: #a5f7b6;
+  --btn-bg: #924bef;
+  --btn-hover-bg: #6d538f;
+  --btn-text: #e9ded8;
+  --select-bg: rgba(16, 10, 24, 0.9);
+  --panel-bg: rgba(49, 27, 80, 0.4);
+  --panel-bg-strong: rgba(71, 41, 112, 0.6);
+  --scroll-bg: rgba(71, 41, 112, 0.5);
+  --dropdown-bg: #100a18;
+  --dropdown-hover-bg: #311b50;
+  --dropdown-hover-text: #a5f7b6;
+  --dropdown-description-color: #62cf85;
+  --modal-card-background: rgba(16, 10, 24, 0.85);
+  --modal-card-recent-projects-background: rgba(16, 10, 24, 0.85);
+  --background: rgba(16, 10, 24, 0.85);
+}
+
+/* ===== Волшебство (volshebstvo) ===== */
+.volshebstvo {
+  --bg-gradient: linear-gradient(135deg, #100a18 0%, #710042 30%, #017c83 70%, #95eef4 100%);
+  --text-color: #fbccdc;
+  --text-light-color: #78d3d8;
+  --text-light-color-second: #95eef4;
+  --text-light-color-third: #00b5ae;
+  --btn-bg: #00b5ae;
+  --btn-hover-bg: #017c83;
+  --btn-text: #ffffff;
+  --select-bg: rgba(0, 84, 101, 0.9);
+  --panel-bg: rgba(1, 124, 131, 0.35);
+  --panel-bg-strong: rgba(0, 181, 174, 0.5);
+  --scroll-bg: rgba(0, 181, 174, 0.4);
+  --dropdown-bg: #000000;
+  --dropdown-hover-bg: #017c83;
+  --dropdown-hover-text: #95eef4;
+  --dropdown-description-color: #78d3d8;
+  --modal-card-background: rgba(0, 84, 101, 0.8);
+  --modal-card-recent-projects-background: rgba(0, 84, 101, 0.8);
+  --background: rgba(0, 84, 101, 0.7);
+}

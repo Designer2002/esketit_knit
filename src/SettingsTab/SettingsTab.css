@@ -1,0 +1,67 @@
+.settings-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 1.5rem;
+  color: var(--text-color);
+}
+
+.settings-tab h3 {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 1.5rem;
+}
+
+.settings-section {
+  padding: 1.5rem;
+  background: var(--panel-bg);
+  border-radius: 12px;
+  border: 1px solid var(--btn-bg);
+}
+
+.settings-section h4 {
+  margin: 0 0 1rem 0;
+  color: var(--text-color);
+  font-size: 1.1rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--btn-bg);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row .label {
+  color: var(--text-color);
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.info-row .value {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.theme-select {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--btn-bg);
+  background: var(--select-bg);
+  color: var(--text-color);
+  font-size: 1rem;
+  cursor: pointer;
+  width: 100%;
+  max-width: 300px;
+}
+
+.hint {
+  color: var(--text-color);
+  opacity: 0.7;
+  font-style: italic;
+  font-size: 0.95rem;
+}

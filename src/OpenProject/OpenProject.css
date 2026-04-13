@@ -1,0 +1,269 @@
+:root {
+  /* Default dark-blue theme colors */
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
+  --text-color: #e0e7ff;
+  --btn-bg: #1e40af;
+  --btn-hover-bg: #1e3a8a;
+  --btn-text: #e0e7ff;
+  --select-bg: rgba(15, 23, 42, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgb(130, 130, 130);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --background: rgba(0, 0, 0, 0.6);
+}
+
+/* Theme classes to update CSS variables */
+.dark-blue {
+  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e40af 100%);
+  --text-color: #e0e7ff;
+  --btn-bg: #1e40af;
+  --btn-hover-bg: #1e3a8a;
+  --btn-text: #e0e7ff;
+  --select-bg: rgba(15, 23, 42, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgba(255, 255, 255, 0.15);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --dropdown-bg: #000919;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #1e40af;
+  --dropdown-description-color: #2556ac;
+  --background: rgba(26, 42, 82, 0.6);
+}
+
+.dark-pink {
+  --bg-gradient: linear-gradient(135deg, #120a0e 0%, #be185d 100%);
+  --text-color: #fce7f3;
+  --btn-bg: #be185d;
+  --btn-hover-bg: #9d174d;
+  --btn-text: #fce7f3;
+  --select-bg: rgba(30, 41, 59, 0.7);
+  --panel-bg: rgba(255, 255, 255, 0.1);
+  --panel-bg-strong: rgba(255, 255, 255, 0.15);
+  --scroll-bg: rgba(255, 255, 255, 0.2);
+  --dropdown-bg: #4b1031;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #be185d;
+  --dropdown-description-color: #de8cd6;
+  --background: rgba(113, 52, 81, 0.6);
+}
+
+.light-orange {
+  --bg-gradient: linear-gradient(135deg, #fed7aa 0%, #fef3c7 100%);
+  --text-color: #5f370e;
+  --btn-bg: #fb923c;
+  --btn-hover-bg: #f97316;
+  --btn-text: #5f370e;
+  --select-bg: rgba(255, 247, 237, 0.75);
+  --panel-bg: rgba(255, 255, 255, 0.35);
+  --panel-bg-strong: rgba(255, 255, 255, 0.5);
+  --scroll-bg: rgba(255, 255, 255, 0.4);
+  --dropdown-bg: #fcd34d;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #b45309;
+  --dropdown-description-color: #92400e;
+  --background: rgba(255, 133, 89, 0.569);
+}
+
+.light-green {
+  --bg-gradient: linear-gradient(135deg, #bbf7d0 0%, #d1fae5 100%);
+  --text-color: #064e3b;
+  --btn-bg: #22c55e;
+  --btn-hover-bg: #16a34a;
+  --btn-text: #064e3b;
+  --select-bg: rgba(220, 252, 231, 0.75);
+  --panel-bg: rgba(255, 255, 255, 0.35);
+  --panel-bg-strong: rgba(255, 255, 255, 0.5);
+  --scroll-bg: rgba(255, 255, 255, 0.4);
+  --dropdown-bg: #34d399;
+  --dropdown-hover-bg: #ffffff;
+  --dropdown-hover-text: #065f46;
+  --dropdown-description-color: #064e3b;
+  --modal-card-recent-projects-background: rgba(103, 194, 115, 0.6);
+}
+
+.mrak {
+  --bg-gradient: linear-gradient(135deg, #150f16 0%, #374652 50%, #5b3d3d 100%);
+  --text-color: #e9ded8;
+  --btn-bg: #ba1f1f;
+  --btn-hover-bg: #8b1515;
+  --btn-text: #e9ded8;
+  --select-bg: rgba(21, 15, 22, 0.9);
+  --panel-bg: rgba(55, 70, 82, 0.4);
+  --panel-bg-strong: rgba(91, 61, 61, 0.6);
+  --scroll-bg: rgba(91, 61, 61, 0.5);
+  --dropdown-bg: #150f16;
+  --dropdown-hover-bg: #5b3d3d;
+  --dropdown-hover-text: #e9ded8;
+  --dropdown-description-color: #9eb4ba;
+  --background: rgba(21, 15, 22, 0.85);
+}
+
+.open-project {
+  min-height: 100vh;
+  background: var(--bg-gradient, linear-gradient(135deg, #0f172a 0%, #1e40af 100%));
+  color: var(--text-color, #e0e7ff);
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.open-project-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.open-project-header h2 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+  font-weight: 700;
+}
+
+.open-project-header p {
+  opacity: 0.8;
+  margin: 0;
+}
+
+.open-project-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.file-select-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 600px;
+}
+
+.btn-select-file {
+  padding: 1rem 2.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 2px solid var(--btn-bg, #1e40af);
+  background: var(--btn-bg, #1e40af);
+  color: var(--btn-text, #fff);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-select-file:hover:not(:disabled) {
+  background: var(--btn-hover-bg, #1e3a8a);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-select-file:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selected-file-info {
+  background: var(--panel-bg, rgba(255, 255, 255, 0.1));
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.file-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.file-path {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 0.95rem;
+}
+
+.open-project-footer {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-open,
+.btn-cancel {
+  padding: 0.75rem 2rem;
+  border-radius: 12px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 1rem;
+}
+
+.btn-open {
+  background: var(--btn-bg, #1e40af);
+  color: var(--btn-text, #fff);
+}
+
+.btn-open:hover:not(:disabled) {
+  background: var(--btn-hover-bg, #1e3a8a);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-open:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--text-color, #fff);
+}
+
+.btn-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+.mystika {
+  --bg-gradient: linear-gradient(135deg, #100a18 0%, #311b50 50%, #472970 100%);
+  --text-color: #e9ded8;
+  --btn-bg: #924bef;
+  --btn-hover-bg: #6d538f;
+  --btn-text: #e9ded8;
+  --select-bg: rgba(16, 10, 24, 0.9);
+  --panel-bg: rgba(49, 27, 80, 0.4);
+  --panel-bg-strong: rgba(71, 41, 112, 0.6);
+  --scroll-bg: rgba(71, 41, 112, 0.5);
+  --dropdown-bg: #100a18;
+  --dropdown-hover-bg: #311b50;
+  --dropdown-hover-text: #a5f7b6;
+  --dropdown-description-color: #62cf85;
+  --background: rgba(16, 10, 24, 0.85);
+  --modal-card-background: rgba(16, 10, 24, 0.85);
+  --modal-card-recent-projects-background: rgba(16, 10, 24, 0.85);
+}

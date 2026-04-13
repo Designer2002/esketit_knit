@@ -1,0 +1,180 @@
+/* ===========================================
+   Custom themes for @svar-ui/react-FileManager
+   Matching EsketitKnit app themes
+   =========================================== */
+
+/* Dark Blue Theme (default) */
+.FileManager-dark-blue {
+  --fm-bg-color: rgba(15, 23, 42, 0.8);
+  --fm-text-color: #e0e7ff;
+  --fm-border-color: rgba(30, 64, 175, 0.3);
+  --fm-hover-bg-color: rgba(30, 64, 175, 0.4);
+  --fm-selected-bg-color: rgba(30, 64, 175, 0.6);
+  --fm-active-bg-color: rgba(59, 130, 246, 0.5);
+  --fm-folder-color: #60a5fa;
+  --fm-file-color: #93c5fd;
+  --fm-scrollbar-bg-color: rgba(255, 255, 255, 0.1);
+  --fm-scrollbar-thumb-color: rgba(59, 130, 246, 0.5);
+  --fm-toolbar-bg-color: rgba(30, 41, 59, 0.5);
+  --fm-toolbar-border-color: rgba(30, 64, 175, 0.3);
+  --fm-input-bg-color: rgba(15, 23, 42, 0.6);
+  --fm-input-border-color: rgba(30, 64, 175, 0.4);
+  --fm-input-focus-border-color: #3b82f6;
+  --fm-button-primary-bg-color: #1e40af;
+  --fm-button-primary-hover-bg-color: #1e3a8a;
+  --fm-button-primary-text-color: #e0e7ff;
+}
+
+/* Dark Pink Theme */
+.FileManager-dark-pink {
+  --fm-bg-color: rgba(18, 10, 14, 0.8);
+  --fm-text-color: #fce7f3;
+  --fm-border-color: rgba(190, 24, 93, 0.3);
+  --fm-hover-bg-color: rgba(190, 24, 93, 0.4);
+  --fm-selected-bg-color: rgba(190, 24, 93, 0.6);
+  --fm-active-bg-color: rgba(236, 72, 153, 0.5);
+  --fm-folder-color: #f472b6;
+  --fm-file-color: #f9a8d4;
+  --fm-scrollbar-bg-color: rgba(255, 255, 255, 0.1);
+  --fm-scrollbar-thumb-color: rgba(236, 72, 153, 0.5);
+  --fm-toolbar-bg-color: rgba(45, 23, 41, 0.5);
+  --fm-toolbar-border-color: rgba(190, 24, 93, 0.3);
+  --fm-input-bg-color: rgba(18, 10, 14, 0.6);
+  --fm-input-border-color: rgba(190, 24, 93, 0.4);
+  --fm-input-focus-border-color: #ec4899;
+  --fm-button-primary-bg-color: #be185d;
+  --fm-button-primary-hover-bg-color: #9d174d;
+  --fm-button-primary-text-color: #fce7f3;
+}
+
+/* Light Orange Theme */
+.FileManager-light-orange {
+  --fm-bg-color: rgba(254, 215, 170, 0.8);
+  --fm-text-color: #5f370e;
+  --fm-border-color: rgba(251, 146, 60, 0.3);
+  --fm-hover-bg-color: rgba(251, 146, 60, 0.3);
+  --fm-selected-bg-color: rgba(251, 146, 60, 0.5);
+  --fm-active-bg-color: rgba(249, 115, 22, 0.4);
+  --fm-folder-color: #fb923c;
+  --fm-file-color: #fdba74;
+  --fm-scrollbar-bg-color: rgba(95, 55, 14, 0.1);
+  --fm-scrollbar-thumb-color: rgba(251, 146, 60, 0.5);
+  --fm-toolbar-bg-color: rgba(254, 211, 173, 0.5);
+  --fm-toolbar-border-color: rgba(251, 146, 60, 0.3);
+  --fm-input-bg-color: rgba(255, 247, 237, 0.7);
+  --fm-input-border-color: rgba(251, 146, 60, 0.4);
+  --fm-input-focus-border-color: #f97316;
+  --fm-button-primary-bg-color: #fb923c;
+  --fm-button-primary-hover-bg-color: #f97316;
+  --fm-button-primary-text-color: #5f370e;
+}
+
+/* Light Green Theme */
+.FileManager-light-green {
+  --fm-bg-color: rgba(187, 247, 208, 0.8);
+  --fm-text-color: #064e3b;
+  --fm-border-color: rgba(34, 197, 94, 0.3);
+  --fm-hover-bg-color: rgba(34, 197, 94, 0.3);
+  --fm-selected-bg-color: rgba(34, 197, 94, 0.5);
+  --fm-active-bg-color: rgba(16, 185, 129, 0.4);
+  --fm-folder-color: #4ade80;
+  --fm-file-color: #86efac;
+  --fm-scrollbar-bg-color: rgba(6, 78, 59, 0.1);
+  --fm-scrollbar-thumb-color: rgba(34, 197, 94, 0.5);
+  --fm-toolbar-bg-color: rgba(167, 243, 208, 0.5);
+  --fm-toolbar-border-color: rgba(34, 197, 94, 0.3);
+  --fm-input-bg-color: rgba(220, 252, 231, 0.7);
+  --fm-input-border-color: rgba(34, 197, 94, 0.4);
+  --fm-input-focus-border-color: #22c55e;
+  --fm-button-primary-bg-color: #22c55e;
+  --fm-button-primary-hover-bg-color: #16a34a;
+  --fm-button-primary-text-color: #064e3b;
+}
+
+/* ===========================================
+   File Manager Component Styles
+   =========================================== */
+.FileManager-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--fm-border-color);
+}
+
+.FileManager-container .fm-file-list {
+  background-color: var(--fm-bg-color);
+  color: var(--fm-text-color);
+}
+
+.FileManager-container .fm-file-item {
+  border-radius: 8px;
+  margin: 2px 4px;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
+}
+
+.FileManager-container .fm-file-item:hover {
+  background-color: var(--fm-hover-bg-color);
+}
+
+.FileManager-container .fm-file-item.fm-selected {
+  background-color: var(--fm-selected-bg-color);
+}
+
+.FileManager-container .fm-file-item.fm-active {
+  background-color: var(--fm-active-bg-color);
+}
+
+.FileManager-container .fm-folder-icon {
+  color: var(--fm-folder-color);
+}
+
+.FileManager-container .fm-file-icon {
+  color: var(--fm-file-color);
+}
+
+.FileManager-container .fm-toolbar {
+  background-color: var(--fm-toolbar-bg-color);
+  border-bottom: 1px solid var(--fm-toolbar-border-color);
+  padding: 12px;
+}
+
+.FileManager-container .fm-breadcrumb {
+  background-color: var(--fm-input-bg-color);
+  border-color: var(--fm-input-border-color);
+  color: var(--fm-text-color);
+}
+
+.FileManager-container .fm-breadcrumb-item:hover {
+  background-color: var(--fm-hover-bg-color);
+}
+
+.FileManager-container .fm-input {
+  background-color: var(--fm-input-bg-color);
+  border-color: var(--fm-input-border-color);
+  color: var(--fm-text-color);
+}
+
+.FileManager-container .fm-input:focus {
+  border-color: var(--fm-input-focus-border-color);
+}
+
+.FileManager-container .fm-button-primary {
+  background-color: var(--fm-button-primary-bg-color);
+  color: var(--fm-button-primary-text-color);
+  border: none;
+}
+
+.FileManager-container .fm-button-primary:hover {
+  background-color: var(--fm-button-primary-hover-bg-color);
+}
+
+.FileManager-container .fm-scrollbar::-webkit-scrollbar {
+  background-color: var(--fm-scrollbar-bg-color);
+}
+
+.FileManager-container .fm-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--fm-scrollbar-thumb-color);
+  border-radius: 8px;
+}
