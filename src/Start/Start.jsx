@@ -272,41 +272,6 @@ const handleOpenProject = async (project) => {
       }}
       id="root"
     >
-      {/* Back Button */}
-      <button
-        onClick={() => window.history.back()}
-        style={{
-          position: "absolute",
-          top: "1rem",
-          left: "1rem",
-          zIndex: 10,
-          background: currentTheme.selectBg,
-          color: currentTheme.textColor,
-          border: "none",
-          borderRadius: "12px",
-          padding: "0.6rem 1rem",
-          fontSize: "1.2rem",
-          fontWeight: "600",
-          cursor: "pointer",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
-          backdropFilter: "blur(10px)",
-          transition: "all 0.2s ease",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = currentTheme.btnBg;
-          e.currentTarget.style.transform = "scale(1.05)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = currentTheme.selectBg;
-          e.currentTarget.style.transform = "scale(1)";
-        }}
-        aria-label="Назад"
-      >
-        ← Назад
-      </button>
       {/* Theme Selector */}
       <div
         style={{

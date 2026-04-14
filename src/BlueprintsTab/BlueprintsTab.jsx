@@ -384,6 +384,26 @@ function BlueprintSVG({
 
   const padding = 10;
   const partNodes = nodes.filter((n) => n.part_code === partCode);
+  
+  // Фильтруем только КЛЮЧЕВЫЕ узлы (не промежуточные pts)
+  // Промежуточные узлы имеют числовой суффикс: armhole_0, shoulder_1, neck_2 и т.д.
+  const isKeyNode = (nodeName) => {
+    // Если есть числовой суффикс - это промежуточный узел
+    if (/_\d+$/.test(nodeName)) {
+      return false;
+    }
+    
+    // Ключевые узлы
+    const keyPatterns = [
+      "_hem", "_underarm", "_raglan", "_neck_center",
+      "_cuff_", "_top_", "neck_left", "neck_right",
+      "neck_left_", "neck_right_"
+    ];
+    
+    return keyPatterns.some(p => nodeName.includes(p));
+  };
+  
+  const keyNodes = partNodes.filter(n => isKeyNode(n.node_name));
 
   const getNodePos = (nodeName) => {
     const n = partNodes.find((nd) => nd.node_name === nodeName);
@@ -399,73 +419,206 @@ function BlueprintSVG({
       return calculation[raglanField] ?? defaultVal;
     };
 
+    // === Helper: collect all points for a section ===
+    const getSectionPoints = (prefix, section) => {
+      // section: 'armhole', 'shoulder', 'neck'
+      return partNodes
+        .filter(n => n.node_name.includes(`${prefix}_${section}_`))
+        .sort((a, b) => a.y - b.y); // sort top to bottom
+    };
+
     if (partCode === "back") {
-      const hemL = getNodePos("back_left_hem") || { x: 0, y: getField("total_rows", "total_garment_rows", 100) };
-      const hemR = getNodePos("back_right_hem") || { x: getField("back_width_stitches", "hem_width_stitches", 100), y: getField("total_rows", "total_garment_rows", 100) };
-      // Подмышка
-      const underarmY = getField("raglan_start_row_front", "armhole_height_rows", 50);
-      const hemW = getField("back_width_stitches", "hem_width_stitches", 100);
-      const uaW = getField("underarm_width_stitches", "underarm_width_stitches", hemW - 20);
+      console.log(calculation.type)
+      // For set_in, collect ALL detailed points
+      if (calculation.type === "set_in") {
+        const hemL = getNodePos("back_left_hem");
+        const hemR = getNodePos("back_right_hem");
+        if (!hemL || !hemR) return null;
+
+        const armholeL = getSectionPoints("back_left", "armhole");
+        const armholeR = getSectionPoints("back_right", "armhole");
+        const shoulderL = getSectionPoints("back_left", "shoulder");
+        const shoulderR = getSectionPoints("back_right", "shoulder");
+        const neckL = getSectionPoints("back_left", "neck");
+        const neckR = getSectionPoints("back_right", "neck");
+        const neckC = getNodePos("back_neck_center");
+
+        let path = `M ${hemL.x} ${hemL.y}`;
+        
+        // Left side up: armhole → shoulder → neck
+        armholeL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        shoulderL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        // Neck center
+        if (neckC) path += ` L ${neckC.x} ${neckC.y}`;
+        
+        // Right side down: neck → shoulder → armhole → hem
+        neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        shoulderR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        armholeR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
+        return path;
+      }
+
+      // Raglan back: NO neckline - straight line shoulder to shoulder
+      const hemL = getNodePos("back_left_hem");
+      const hemR = getNodePos("back_right_hem");
+       const cutL = getNodePos("back_left_cut") || { x: 0, y: getField("armhole_height_rows") };
+      const cutR = getNodePos("back_right_cut") || { x: getField("back_width_stitches", "hem_width_stitches", 100), y: getField("armhole_height_rows") };
+
+      const underarmY = getField("raglan_start_row_back", "armhole_height_rows", 50);
       const underarmL = getNodePos("back_left_underarm") || { x: (hemW - (hemW - uaW)) / 2, y: underarmY };
       const underarmR = getNodePos("back_right_underarm") || { x: (hemW + (hemW - uaW)) / 2, y: underarmY };
+      
       const shoulderL = getNodePos("back_left_shoulder") || underarmL;
       const shoulderR = getNodePos("back_right_shoulder") || underarmR;
-      // Шея
-      const neckW = getField("neck_width_stitches", "neck_width_stitches", 20);
-      const neckL = getNodePos("back_left_raglan") || { x: (hemW - neckW) / 2, y: 0 };
-      const neckR = getNodePos("back_right_raglan") || { x: (hemW + neckW) / 2, y: 0 };
-      const neckC = getNodePos("back_neck_center") || { x: hemW / 2, y: -2 };
+
+      const neckL = getNodePos("back_neck_left");
+      const neckR = getNodePos("back_neck_right");
 
       return `M ${hemL.x} ${hemL.y}
+            L ${cutL.x} ${cutL.y}
             L ${underarmL.x} ${underarmL.y}
             L ${shoulderL.x} ${shoulderL.y}
             L ${neckL.x} ${neckL.y}
-            Q ${neckC.x} ${neckC.y} ${neckR.x} ${neckR.y}
+            L ${neckR.x} ${neckR.y}
             L ${shoulderR.x} ${shoulderR.y}
             L ${underarmR.x} ${underarmR.y}
+            L ${cutR.x} ${cutR.y}
             L ${hemR.x} ${hemR.y} Z`;
     }
 
     if (partCode === "front") {
+      // For set_in, collect ALL detailed points
+      if (calculation.type === "set_in") {
+        const hemL = getNodePos("front_left_hem");
+        const hemR = getNodePos("front_right_hem");
+        if (!hemL || !hemR) return null;
+
+        const armholeL = getSectionPoints("front_left", "armhole");
+        const armholeR = getSectionPoints("front_right", "armhole");
+        const shoulderL = getSectionPoints("front_left", "shoulder");
+        const shoulderR = getSectionPoints("front_right", "shoulder");
+        const neckL = getSectionPoints("front_left", "neck");
+        const neckR = getSectionPoints("front_right", "neck");
+        const neckC = getNodePos("front_neck_center");
+
+        let path = `M ${hemL.x} ${hemL.y}`;
+
+        // Left side up: armhole → shoulder → neck
+        armholeL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        shoulderL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        // Neckline - V vs U
+        if (necklineType === "V" && neckC) {
+          // V-neck: straight diagonal to bottom point
+          path += ` L ${neckC.x} ${neckC.y}`;
+        } else {
+          // U-neck: rounded through all points
+          neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+          if (neckC) path += ` L ${neckC.x} ${neckC.y}`;
+        }
+        // Right side down: neck → shoulder → armhole → hem
+        neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        shoulderR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        armholeR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
+        return path;
+      }
+
+      // Raglan front: use detailed neck points if available
       const hemL = getNodePos("front_left_hem") || { x: 0, y: getField("total_rows", "total_garment_rows", 100) };
       const hemR = getNodePos("front_right_hem") || { x: getField("front_width_stitches", "hem_width_stitches", 100), y: getField("total_rows", "total_garment_rows", 100) };
+       const cutL = getNodePos("front_left_cut") || { x: 0, y: getField("armhole_height_rows") };
+      const cutR = getNodePos("front_right_cut") || { x: getField("front_width_stitches", "hem_width_stitches", 100), y: getField("armhole_height_rows") };
+
       const underarmY = getField("raglan_start_row_front", "armhole_height_rows", 50);
       const hemW = getField("front_width_stitches", "hem_width_stitches", 100);
       const uaW = getField("underarm_width_stitches", "underarm_width_stitches", hemW - 20);
       const underarmL = getNodePos("front_left_underarm") || { x: (hemW - (hemW - uaW)) / 2, y: underarmY };
       const underarmR = getNodePos("front_right_underarm") || { x: (hemW + (hemW - uaW)) / 2, y: underarmY };
-      const shoulderL = getNodePos("front_left_shoulder") || underarmL;
-      const shoulderR = getNodePos("front_right_shoulder") || underarmR;
-      const neckW = getField("neck_width_stitches", "neck_width_stitches", 20);
-      const neckL = getNodePos("front_neck_left") || { x: (hemW - neckW) / 2, y: 0 };
-      const neckR = getNodePos("front_neck_right") || { x: (hemW + neckW) / 2, y: 0 };
-      const neckDepth = getField("neck_depth_rows", "neck_depth_rows", 10);
-      const neckC = getNodePos("front_neck_center") || { x: hemW / 2, y: neckDepth };
+      
+      // Shoulder and neck - try detailed points first
+      const shoulderL = getSectionPoints("front_left", "shoulder");
+      const shoulderR = getSectionPoints("front_right", "shoulder");
+      const neckL = getSectionPoints("front_left", "neck");
+      const neckR = getSectionPoints("front_right", "neck");
+      const neckC = getNodePos("front_neck_center");
+      const neckY = shoulderR[0];
+      
+      const hasDetailedNeck = neckL.length > 0 && neckR.length > 0;
 
-      // V/U вырез
+      if (hasDetailedNeck) {
+        const shoulderLDefault = shoulderL.length > 0 ? shoulderL : [getNodePos("front_left_shoulder") || underarmL];
+        const shoulderRDefault = shoulderR.length > 0 ? shoulderR : [getNodePos("front_right_shoulder") || underarmR];
+
+        let path = `M ${hemL.x} ${hemL.y}`;
+        path += ` L ${cutL.x} ${cutL.y}`;
+        path += ` L ${underarmL.x} ${underarmL.y}`;
+        shoulderLDefault.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        // Neckline - different for V vs U
+        if (necklineType === "V" && neckC) {
+          // V-neck: straight diagonal lines, skip intermediate decrease points
+          // Go from shoulder start straight to bottom of V, then back up
+       
+          path += ` L ${neckL[0].x} ${neckL[0].y}`;
+          path += ` L ${neckC.x} ${neckC.y}`;
+          path += ` L ${neckR[0].x} ${neckR[0].y}`;
+          
+        } else {
+          // U-neck: use all neck decrease points for rounded shape
+          path += ` L ${neckL[0].x} ${neckY.y}`;
+          neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+         neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+   
+        }
+        path += ` L ${neckR[0].x} ${neckY.y}`;
+        shoulderRDefault.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        
+        path += ` L ${underarmR.x} ${underarmR.y}`;
+        path += ` L ${cutR.x} ${cutR.y}`;
+        path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
+        return path;
+      }
+
+      // Fallback: simple corner points with V/U neck
+      const neckW = getField("neck_width_stitches", "neck_width_stitches", 20);
+      const neckLSimple = getNodePos("front_neck_left") || { x: (hemW - neckW) / 2, y: 0 };
+      const neckRSimple = getNodePos("front_neck_right") || { x: (hemW + neckW) / 2, y: 0 };
+      const neckDepth = getField("neck_depth_rows", "neck_depth_rows", 10);
+      const neckCSimple = getNodePos("front_neck_center") || { x: hemW / 2, y: neckDepth };
+      const shoulderLSimple = getNodePos("front_left_shoulder") || underarmL;
+      const shoulderRSimple = getNodePos("front_right_shoulder") || underarmR;
+
       let neckPath;
       if (necklineType === "V") {
-        neckPath = `L ${neckC.x} ${neckC.y} L ${neckR.x} ${neckR.y}`;
+        neckPath = `L ${neckCSimple.x} ${neckCSimple.y} L ${neckRSimple.x} ${neckRSimple.y}`;
       } else {
-        neckPath = `Q ${neckC.x} ${neckC.y} ${neckR.x} ${neckR.y}`;
+        neckPath = `Q ${neckCSimple.x} ${neckCSimple.y} ${neckRSimple.x} ${neckRSimple.y}`;
       }
 
       return `M ${hemL.x} ${hemL.y}
-            L ${underarmL.x} ${underarmL.y}
-            L ${shoulderL.x} ${shoulderL.y}
-            L ${neckL.x} ${neckL.y}
+            L ${cutL.x} ${cutL.y}
+            L ${shoulderLSimple.x} ${shoulderLSimple.y}
+            L ${neckLSimple.x} ${neckLSimple.y}
             ${neckPath}
-            L ${shoulderR.x} ${shoulderR.y}
-            L ${underarmR.x} ${underarmR.y}
+            L ${shoulderRSimple.x} ${shoulderRSimple.y}
+            L ${cutR.x} ${cutR.y}
             L ${hemR.x} ${hemR.y} Z`;
     }
 
     // ===== РУКАВА =====
     if (partCode === "sleeve_left" || partCode === "sleeve_right") {
       const isLeft = partCode === "sleeve_left";
-
+console.log(nodes);
       const cuffL = getNodePos("sleeve_cuff_left") || { x: 0, y: 0 };
       const cuffR = getNodePos("sleeve_cuff_right") || { x: 0, y: 0 };
+      const cutL = getNodePos("sleeve_cut_left") || { x: 0, y: 0 };
+      const cutR = getNodePos("sleeve_cut_right") || { x: 0, y: 0 };
       const underarmL = getNodePos("sleeve_underarm_left") || { x: 0, y: 0 };
       const underarmR = getNodePos("sleeve_underarm_right") || { x: 0, y: 0 };
       const topL = getNodePos("sleeve_top_left") || { x: 0, y: 0 };
@@ -474,15 +627,19 @@ function BlueprintSVG({
       // Подрез — для raglan, для set_in = 0
       const dx = getField("decrease_shoulder_cuts", null, 0) || 0;
 
+      console.log(cutL, cutR)
+
       if (isLeft) {
         return `
           M ${cuffL.x} ${cuffL.y}
+          L ${cutL.x} ${cutL.y}
           L ${underarmL.x} ${underarmL.y}
           L ${underarmL.x + dx} ${underarmL.y}
           L ${topL.x} ${topL.y}
           L ${topR.x} ${topR.y}
           L ${underarmR.x - dx} ${underarmR.y}
           L ${underarmR.x} ${underarmR.y}
+          L ${cutR.x} ${cutR.y}
           L ${cuffR.x} ${cuffR.y}
           Z`;
       } else {
@@ -491,12 +648,14 @@ function BlueprintSVG({
 
         return `
           M ${mirrorX(cuffL.x)} ${cuffL.y}
+          L ${mirrorX(cutL.x)} ${cutL.y}
           L ${mirrorX(underarmL.x)} ${underarmL.y}
           L ${mirrorX(underarmL.x + dx)} ${underarmL.y}
           L ${mirrorX(topL.x)} ${topL.y}
           L ${mirrorX(topR.x)} ${topR.y}
           L ${mirrorX(underarmR.x - dx)} ${underarmR.y}
           L ${mirrorX(underarmR.x)} ${underarmR.y}
+          L ${mirrorX(cutR.x)} ${cutR.y}
           L ${mirrorX(cuffR.x)} ${cuffR.y}
           Z`;
       }
@@ -882,8 +1041,8 @@ function BlueprintSVG({
           );
         })}
 
-        {/* Nodes */}
-        {partNodes
+        {/* Nodes - only KEY nodes, not intermediate pts */}
+        {keyNodes
           .filter((node) => !node.node_name.includes("_raglan_slope_"))
           .map((node) => {
             // Для правого рукава зеркалим X координаты нод
@@ -899,12 +1058,13 @@ function BlueprintSVG({
 
             const isSelected = selectedNode === node.node_name;
             const label = getNodeLabelRu(node.node_name);
+            
             return (
               <g key={`${node.part_code}::${node.node_name}`}>
                 <circle
                   cx={displayX}
                   cy={displayY}
-                  r={isSelected ? 3 : 1}
+                  r={isSelected ? 4 : 2.5}
                   fill={isSelected ? "#FF9800" : "#2196F3"}
                   stroke="#fff"
                   strokeWidth="1.5"
@@ -912,35 +1072,21 @@ function BlueprintSVG({
                   onMouseDown={(e) => handleMouseDown(e, node.node_name)}
                   style={{ cursor: "pointer" }}
                 />
-                {/* Label: показываем ТОЛЬКО при клике */}
+                {/* Label: показываем при клике */}
                 {isSelected && (
-                  <>
-                    <text
-                      x={displayX + 8}
-                      y={displayY + 4}
-                      fill="#FFD54F"
-                      fontSize="11"
-                      fontFamily="Arial"
-                      fontWeight="bold"
-                      paintOrder="stroke"
-                      stroke="rgba(0,0,0,0.9)"
-                      strokeWidth="3"
-                    >
-                      {label}
-                    </text>
-                    <text
-                      x={displayX + 8}
-                      y={displayY + 18}
-                      fill="rgba(255,255,255,0.8)"
-                      fontSize="9"
-                      fontFamily="monospace"
-                      paintOrder="stroke"
-                      stroke="rgba(0,0,0,0.7)"
-                      strokeWidth="2"
-                    >
-                      ({displayX.toFixed(0)}, {displayY.toFixed(0)})
-                    </text>
-                  </>
+                  <text
+                    x={displayX + 6}
+                    y={displayY + 3}
+                    fill="#FFD54F"
+                    fontSize="9"
+                    fontFamily="Arial"
+                    fontWeight="bold"
+                    paintOrder="stroke"
+                    stroke="rgba(0,0,0,0.9)"
+                    strokeWidth="2.5"
+                  >
+                    {label}
+                  </text>
                 )}
               </g>
             );
@@ -956,7 +1102,7 @@ function BlueprintSVG({
           const mirrorX = (x) => sleeveCx - (x - sleeveCx);
           const dx = isRightSleeve ? mirrorX(node.x) : node.x;
           return (
-            <circle key={`podrez-${i}`} cx={dx} cy={node.y} r="3" fill="#ff4444" stroke="#fff" strokeWidth="1.5"/>
+            <circle key={`podrez-${i}`} cx={dx} cy={node.y} r="1" fill="#ff4444" stroke="#fff" strokeWidth="1.5"/>
           );
         })}
 
@@ -1078,36 +1224,57 @@ function BlueprintSVG({
 
 // ===== РУССКИЕ НАЗВАНИЯ УЗЛОВ =====
 const NODE_NAMES_RU = {
-  back_left_hem: "Подол (левый)",
-  back_right_hem: "Подол (правый)",
-  back_left_underarm: "Подмышка (левая)",
-  back_right_underarm: "Подмышка (правая)",
-  back_left_shoulder: "Плечо (левое)",
-  back_right_shoulder: "Плечо (правое)",
-  back_left_raglan: "Реглан (левый)",
-  back_right_raglan: "Реглан (правый)",
+  back_left_hem: "Подол",
+  back_right_hem: "Подол",
+  back_left_underarm: "Подмышка",
+  back_right_underarm: "Подмышка",
+  back_left_shoulder: "Плечо",
+  back_right_shoulder: "Плечо",
+  back_left_raglan: "Горловина",
+  back_right_raglan: "Горловина",
   back_neck_center: "Центр горловины",
-  front_left_hem: "Подол (левый)",
-  front_right_hem: "Подол (правый)",
-  front_left_underarm: "Подмышка (левая)",
-  front_right_underarm: "Подмышка (правая)",
-  front_left_shoulder: "Плечо (левое)",
-  front_right_shoulder: "Плечо (правое)",
-  front_left_raglan: "Реглан (левый)",
-  front_right_raglan: "Реглан (правый)",
-  front_neck_left: "Горловина (левая)",
-  front_neck_right: "Горловина (правая)",
-  front_neck_center: "Центр U-выреза",
-  sleeve_cuff_left: "Манжета (левая)",
-  sleeve_cuff_right: "Манжета (правая)",
-  sleeve_underarm_left: "Подрез (левый)",
-  sleeve_underarm_right: "Подрез (правый)",
-  sleeve_top_left: "Вершина (левая)",
-  sleeve_top_right: "Вершина (правая)",
+  front_left_hem: "Подол",
+  front_right_hem: "Подол",
+  front_left_underarm: "Подмышка",
+  front_right_underarm: "Подмышка",
+  front_left_shoulder: "Плечо",
+  front_right_shoulder: "Плечо",
+  front_neck_left: "Горловина",
+  front_neck_right: "Горловина",
+  front_neck_center: "Центр горловины",
+  sleeve_cuff_left: "Манжета",
+  sleeve_cuff_right: "Манжета",
+  sleeve_underarm_left: "Подрез",
+  sleeve_underarm_right: "Подрез",
+  sleeve_top_left: "Верх рукава",
+  sleeve_top_right: "Верх рукава",
+  // Set-in sleeve nodes
+  "back_left_neck_": "Горловина",
+  "back_right_neck_": "Горловина",
+  "front_left_neck_": "Горловина",
+  "front_right_neck_": "Горловина",
+  "back_left_shoulder_": "Плечо",
+  "back_right_shoulder_": "Плечо",
+  "front_left_shoulder_": "Плечо",
+  "front_right_shoulder_": "Плечо",
+  "back_left_armhole_": "Пройма",
+  "back_right_armhole_": "Пройма",
+  "front_left_armhole_": "Пройма",
+  "front_right_armhole_": "Пройма",
 };
 
 function getNodeLabelRu(nodeName) {
-  return NODE_NAMES_RU[nodeName] || nodeName;
+  // Exact match first
+  if (NODE_NAMES_RU[nodeName]) return NODE_NAMES_RU[nodeName];
+  
+  // Prefix match for set-in nodes (back_left_neck_0, back_left_neck_1, etc.)
+  for (const [prefix, label] of Object.entries(NODE_NAMES_RU)) {
+    if (prefix.endsWith("_") && nodeName.includes(prefix)) {
+      return label;
+    }
+  }
+  
+  return nodeName;
 }
 
 // ===== HELPER: format decrease rows with counts =====
@@ -1265,11 +1432,12 @@ export default function BlueprintsTab({ projectId }) {
     loadKnittingSettings();
   }, [projectId]);
 
+  // Пересчитываем при изменении measurements ИЛИ sleeveType
   useEffect(() => {
-    if (measurements) {
+    if (measurements && sleeveType) {
       recalculate();
     }
-  }, [measurements]);
+  }, [measurements, sleeveType]);
 
   const loadMeasurements = async () => {
     try {
@@ -1687,7 +1855,7 @@ export default function BlueprintsTab({ projectId }) {
     <div className="blueprints-tab">
       {/* Header */}
       <div className="blueprints-header">
-        <h2>🧵 Выкройка: {sleeveType === "set_in" ? "Втачной рукав" : "Реглан"}</h2>
+        <h2>🧵 Выкройка: {calculation?.type === "set_in" ? "Втачной рукав" : calculation?.type === "raglan" ? "Реглан" : sleeveType === "set_in" ? "Втачной рукав" : "Реглан"}</h2>
         <div className="blueprints-actions">
           <button
             className="btn-secondary"

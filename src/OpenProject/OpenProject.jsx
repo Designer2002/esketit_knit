@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 import useToast from "../Toast/useToast";
 import "../Toast/Toast.css";
 import "./OpenProject.css";
 
 export default function OpenProject() {
+  const navigate = useNavigate();
   const { addToast, ToastContainer } = useToast();
   const [theme, setTheme] = useState("dark-blue");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -70,13 +72,7 @@ export default function OpenProject() {
     <div className={`open-project ${theme}`}>
       <button
         className="btn-back-global"
-        onClick={async () => {
-          try {
-            await invoke("open_start_window");
-          } catch (error) {
-            console.error("Failed to navigate back:", error);
-          }
-        }}
+        onClick={() => navigate("/")}
         type="button"
         aria-label="Назад"
       >

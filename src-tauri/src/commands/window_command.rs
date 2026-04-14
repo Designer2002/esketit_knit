@@ -4,11 +4,22 @@ use tauri_plugin_log::log;
 
 #[tauri::command]
 pub async fn open_start_window(app: AppHandle) -> Result<(), String> {
-    // Закрываем текущее окно create_project
+    // Если окно "main" уже есть - фокусируем его
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Если есть окно create_project - закрываем его
     if let Some(window) = app.get_webview_window("start") {
         let _ = window.close();
     }
     
+    // Если есть окно editor - закрываем его
+    if let Some(window) = app.get_webview_window("editor") {
+        let _ = window.close();
+    }
+
     // Создаём главное окно
     let _window = WebviewWindowBuilder::new(&app, "main", WebviewUrl::App("#/".into()))
         .title("EsketitKnit - Главная")
@@ -16,7 +27,7 @@ pub async fn open_start_window(app: AppHandle) -> Result<(), String> {
         .resizable(false)
         .build()
         .map_err(|e| format!("Failed to create main window: {}", e))?;
-    
+
     Ok(())
 }
 
@@ -25,8 +36,17 @@ pub async fn open_create_project_window(
     app: AppHandle,
     window_state: State<'_, WindowState>,
 ) -> Result<(), String> {
-    // Если окно уже открыто — ничего не делаем
-    if window_state.is_open() {
+    // Закрываем старое main/editor окна если есть
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.close();
+    }
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.close();
+    }
+
+    // Если окно уже открыто — фокусируем его
+    if let Some(window) = app.get_webview_window("start") {
+        window.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
@@ -37,8 +57,7 @@ pub async fn open_create_project_window(
             .resizable(false)
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
-    let w = app.get_webview_window("main").unwrap();
-    w.close();
+
     // Помечаем как открытое
     window_state.set_open(true);
 
@@ -59,10 +78,19 @@ pub async fn open_create_project_window(
 #[tauri::command]
 pub async fn open_project_window(
     app: AppHandle,
-    window_state: State<'_, WindowState>,
+    _window_state: State<'_, WindowState>,
 ) -> Result<(), String> {
-    // Если окно уже открыто — ничего не делаем
-    if window_state.is_open() {
+    // Закрываем старое main окно если есть
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.close();
+    }
+    if let Some(w) = app.get_webview_window("editor") {
+        let _ = w.close();
+    }
+
+    // Если окно уже открыто — фокусируем его
+    if let Some(window) = app.get_webview_window("open_project") {
+        window.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
@@ -82,17 +110,21 @@ pub async fn open_project_window(
 
 #[tauri::command]
 pub async fn open_project_editor(app: AppHandle, project_id: i64) -> Result<(), String> {
-    // 1. Создаём окно редактора
     let window_label = "editor";
-    //let ALL_WINDOWS_LABELS: Vec<String> = app.webview_windows().keys().cloned().collect();
-    let w = app.get_webview_window("main").unwrap_or_else(|| app.get_webview_window("start").expect("no windows"));
-    w.close();
-    if app.get_webview_window(&window_label).is_some() {
-        // Окно уже открыто — просто фокусируем
-        if let Some(window) = app.get_webview_window(&window_label) {
-            window.set_focus().map_err(|e| e.to_string())?;
-        }
+
+    // Окно уже открыто — просто фокусируем
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
+    }
+
+    // Закрываем старое окно если есть
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.close();
+    } else if let Some(w) = app.get_webview_window("start") {
+        let _ = w.close();
+    } else if let Some(w) = app.get_webview_window("open_project") {
+        let _ = w.close();
     }
 
     let _window = tauri::WebviewWindowBuilder::new(

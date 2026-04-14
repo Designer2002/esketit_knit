@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { homeDir } from "@tauri-apps/api/path";
+import { useNavigate } from "react-router-dom";
 import "./CreateProject.css";
 import useToast from "../Toast/useToast";
 import "../Toast/Toast.css";
@@ -29,17 +30,11 @@ function FancyButton({ children, onClick }) {
 }
 
 export default function CreateProject() {
+  const navigate = useNavigate();
   const { addToast, ToastContainer } = useToast();
-  
+
   // ===== Состояния =====
-  const [theme, setTheme] = useState(() => {
-    // Try to get theme from localStorage first (persists across tabs)
-    try {
-      return localStorage.getItem("app_theme") || "dark-blue";
-    } catch {
-      return "dark-blue";
-    }
-  });
+  const [theme, setTheme] = useState("dark-blue");
   const [isInitialized, setIsInitialized] = useState(false);
   const [selectedOption, setSelectedOption] = useState(null);
   const [garmentTypes, setGarmentTypes] = useState([]);
@@ -236,13 +231,7 @@ export default function CreateProject() {
         {/* Back Button */}
         <button
           className="btn-back-global"
-          onClick={async () => {
-            try {
-              await invoke("open_create_project_window");
-            } catch (error) {
-              console.error("Failed to navigate back:", error);
-            }
-          }}
+          onClick={() => navigate("/")}
           type="button"
           aria-label="Назад"
           title="Вернуться на главную"

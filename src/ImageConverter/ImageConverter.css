@@ -492,20 +492,3 @@
   box-shadow: none;
 }
 
-.mystika {
-  --bg-gradient: linear-gradient(135deg, #100a18 0%, #311b50 50%, #472970 100%);
-  --text-color: #e9ded8;
-  --btn-bg: #924bef;
-  --btn-hover-bg: #6d538f;
-  --btn-text: #e9ded8;
-  --select-bg: rgba(16, 10, 24, 0.9);
-  --panel-bg: rgba(49, 27, 80, 0.4);
-  --panel-bg-strong: rgba(71, 41, 112, 0.6);
-  --scroll-bg: rgba(71, 41, 112, 0.5);
-  --dropdown-bg: #100a18;
-  --dropdown-hover-bg: #311b50;
-  --dropdown-hover-text: #a5f7b6;
-  --dropdown-description-color: #62cf85;
-  --background: rgba(16, 10, 24, 0.85);
-  --modal-card-background: rgba(16, 10, 24, 0.85);
-}

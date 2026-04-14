@@ -363,6 +363,8 @@ fn calculate_raglan(m: &ProjectMeasurements) -> RaglanCalculation {
     let neck_y_shoulder = hem_y - shoulder_row as f64;
     let bottom_row = *neck_dec_rows.iter().min().unwrap_or(&garment_length_rows);
     let neck_y_bottom = hem_y - bottom_row as f64;
+    let half_neck_front_st = ((m.oh / 2.0 / 2.0) * p);
+    let rem: f64 =(m.glg- half_neck_front_st).max(0.0);
 
     nodes.extend([
         BlueprintNodePosition {
@@ -435,6 +437,7 @@ fn calculate_raglan(m: &ProjectMeasurements) -> RaglanCalculation {
             part_code: "front".into(),
             was_manually_moved: false,
         },
+
         BlueprintNodePosition {
             node_name: "front_neck_center".into(),
             x: fcx,
@@ -585,6 +588,7 @@ fn calculate_raglan(m: &ProjectMeasurements) -> RaglanCalculation {
         nodes,
         sleeve_raglan_rows_back: sleeve_raglan_back,
         sleeve_raglan_rows_front: sleeve_raglan_front,
+        neck_rem: rem
     }
 }
 

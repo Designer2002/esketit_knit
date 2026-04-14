@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use super::traits::Calculation;
 
 /// One group of decreases (используется в втачном рукаве и горловине)
 #[derive(Debug, Serialize, Deserialize, Clone, Default, FromRow)]
@@ -99,6 +100,20 @@ pub struct RaglanCalculation {
     pub nodes: Vec<BlueprintNodePosition>,
     pub sleeve_raglan_rows_back: Vec<i32>,
     pub sleeve_raglan_rows_front: Vec<i32>,
+    pub neck_rem: f64
+}
+
+impl Calculation for RaglanCalculation {
+    fn nodes(&self) -> &Vec<BlueprintNodePosition> { &self.nodes }
+    fn nodes_mut(&mut self) -> &mut Vec<BlueprintNodePosition> { &mut self.nodes }
+    fn viewbox_width(&self) -> i32 { self.viewbox_width }
+    fn viewbox_height(&self) -> i32 { self.viewbox_height }
+    fn neck_width_stitches(&self) -> i32 { self.neck_width_stitches }
+    fn neck_depth_rows(&self) -> i32 { self.neck_depth_rows }
+    fn sleeve_cuff_stitches(&self) -> i32 { self.sleeve_cuff_stitches }
+    fn sleeve_top_stitches(&self) -> i32 { self.sleeve_top_stitches }
+    fn total_rows(&self) -> i32 { self.total_rows }
+    fn as_raglan(&self) -> Option<&RaglanCalculation> { Some(self) }
 }
 
 /// Full calculation result (SET-IN SLEEVE)
@@ -133,7 +148,7 @@ pub struct SetInSleeveCalculation {
 
     // === РУКАВ ===
     pub sleeve_cuff_stitches: i32,         // Манжета
-    pub sleeve_widest_stitches: i32,       // Самая широкая часть (подмышка)
+    pub sleeve_widest_stitches: i32,       // Самая широщая часть (подмышка)
     pub sleeve_cap_height_rows: i32,       // Высота оката
     pub sleeve_cap_decreases: Vec<DecreaseGroup>, // Убавки оката
     pub sleeve_body_rows: i32,             // Длина рукава до оката
@@ -144,6 +159,19 @@ pub struct SetInSleeveCalculation {
     pub waist_start_row: i32,                // Ряд начала убавок (от подола)
     pub waist_end_row: i32,                  // Ряд конца убавок (талия)
     pub waist_point_row: i32,                // Ряд линии талии
+}
+
+impl Calculation for SetInSleeveCalculation {
+    fn nodes(&self) -> &Vec<BlueprintNodePosition> { &self.nodes }
+    fn nodes_mut(&mut self) -> &mut Vec<BlueprintNodePosition> { &mut self.nodes }
+    fn viewbox_width(&self) -> i32 { self.viewbox_width }
+    fn viewbox_height(&self) -> i32 { self.viewbox_height }
+    fn neck_width_stitches(&self) -> i32 { self.neck_width_stitches }
+    fn neck_depth_rows(&self) -> i32 { self.neck_depth_rows }
+    fn sleeve_cuff_stitches(&self) -> i32 { self.sleeve_cuff_stitches }
+    fn sleeve_top_stitches(&self) -> i32 { self.sleeve_widest_stitches }
+    fn total_rows(&self) -> i32 { self.total_garment_rows }
+    fn as_set_in(&self) -> Option<&SetInSleeveCalculation> { Some(self) }
 }
 
 /// Unified calculation result (either Raglan or Set-In)
@@ -257,4 +285,93 @@ pub struct BlueprintKnittingSettings {
     pub boundary_mode: String,
     pub empty_row_mode: String,
     pub auto_calculate_nodes: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct BaseSleeveDimensions {
+    pub cuff_stitches: i32,        // манжета
+    pub middle_stitches: i32,      // самая широкая часть (подмышка)
+    pub height_rows: i32,          // полная длина
+    pub increase_rows: Vec<i32>,   // ряды прибавок до widest
+
+}
+
+
+#[derive(Debug, Clone)]
+pub struct RaglanSleeveDimensions {
+    pub base: BaseSleeveDimensions,
+    // === Реглан-специфичное ===
+    pub top_stitches: i32,              // ширина у горловины
+    pub shoulder_cut_rows: i32,         // где начинаются убавки плеча
+    pub cap_offset: f64,                // микро-наклон оката
+    pub slope_start_x: f64,
+    pub slope_end_x: f64,
+    pub raglan_line_rows: i32,          // длина реглан-линии в рядах
+    pub cuff_stitches: i32,
+    pub start_raglan_stitches: i32,
+    pub decrease_shoulders_stitches: i32,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct SetInSleeveDimensions {
+    pub base: BaseSleeveDimensions,
+    // === Втачной-специфичное ===
+    pub armhole_depth_rows: i32,        // глубина проймы
+    pub cap_height_rows: i32,           // высота оката
+    pub cap_curve: Vec<(i32, i32)>,     // (row, decrease_count) для формы оката
+    pub ease_at_cap: f64,               // посадка по окату
+
+}
+
+#[derive(Debug, Clone)]
+pub enum SleeveDimensions {
+    Raglan(RaglanSleeveDimensions),
+    SetIn(SetInSleeveDimensions),
+}
+
+// Удобные геттеры для общих полей
+impl SleeveDimensions {
+    pub fn base(&self) -> &BaseSleeveDimensions {
+        match self {
+            Self::Raglan(r) => &r.base,
+            Self::SetIn(s) => &s.base,
+        }
+    }
+    
+    pub fn cuff_stitches(&self) -> i32 { self.base().cuff_stitches }
+    pub fn middle_stitches(&self) -> i32 { self.base().middle_stitches }
+    pub fn height_rows(&self) -> i32 { self.base().height_rows }
+    pub fn increase_rows(&self) -> &Vec<i32> { &self.base().increase_rows }
+     pub fn as_raglan(&self) -> Option<&RaglanSleeveDimensions> {
+        if let Self::Raglan(r) = self { Some(r) } else { None }
+    }
+    
+    pub fn as_set_in(&self) -> Option<&SetInSleeveDimensions> {
+        if let Self::SetIn(s) = self { Some(s) } else { None }
+    }
+    // Геттеры с дефолтами для специфичных полей (чтобы не матчить каждый раз)
+    pub fn top_stitches(&self) -> i32 {
+        match self {
+            Self::Raglan(r) => r.top_stitches,
+            Self::SetIn(s) => s.base.middle_stitches, // для втачного "топ" = widest
+        }
+    }
+    pub fn shoulder_cut_rows(&self) -> i32 {
+        match self {
+            Self::Raglan(r) => r.shoulder_cut_rows,
+            Self::SetIn(s) => s.armhole_depth_rows,
+        }
+    }
+    pub fn cap_offset(&self) -> f64 {
+        match self {
+            Self::Raglan(r) => r.cap_offset,
+            Self::SetIn(s) => s.ease_at_cap * 10.0, // условный маппинг
+        }
+    }
+}
+
+impl RaglanSleeveDimensions{
+    pub fn slope_start_x(&self) -> f64 {self.slope_start_x}
+    pub fn slope_end_x(&self) -> f64 {self.slope_end_x}
 }

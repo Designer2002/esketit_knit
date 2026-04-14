@@ -6,7 +6,7 @@ pub trait GarmentPart {
     fn generate_nodes(
         &self,
         m: &ProjectMeasurements,
-        calc: &RaglanCalculation,
+        calc: &dyn Calculation,
         part_code: &str,
         cx: f64,
         hem_y: f64,
@@ -17,30 +17,26 @@ pub trait GarmentPart {
 pub trait SleeveType: Send + Sync {
     fn sleeve_type_id(&self) -> &str;
 
-    fn calculate_sleeve(
-        &self,
-        m: &ProjectMeasurements,
-        dec_shoulder_st: i32,
-    ) -> SleeveDimensions;
-
+    fn calculate_sleeve(&self, m: &ProjectMeasurements, dec_shoulder_st: i32) -> SleeveDimensions;
+    
     fn generate_left_nodes(
         &self,
         m: &ProjectMeasurements,
-        calc: &RaglanCalculation,
-        dims: &SleeveDimensions,
+        calc: &dyn Calculation,
+        dims: &SleeveDimensions,  // принимаем энум
         cx: f64,
     ) -> Vec<BlueprintNodePosition>;
-
+    
     fn generate_right_nodes(
         &self,
         m: &ProjectMeasurements,
-        calc: &RaglanCalculation,
+        calc: &dyn Calculation,
         dims: &SleeveDimensions,
         cx: f64,
     ) -> Vec<BlueprintNodePosition>;
 
-    fn front_decrease_rows(&self, calc: &RaglanCalculation) -> Vec<i32>;
-    fn back_decrease_rows(&self, calc: &RaglanCalculation) -> Vec<i32>;
+    fn front_decrease_rows(&self, calc: &dyn Calculation) -> Vec<i32>;
+    fn back_decrease_rows(&self, calc: &dyn Calculation) -> Vec<i32>;
 
     // === НОВЫЕ МЕТОДЫ ДЛЯ ВТАЧНОГО РУКАВА ===
     fn armhole_decreases(&self) -> Vec<DecreaseGroup> { vec![] }
@@ -53,15 +49,42 @@ pub trait SleeveType: Send + Sync {
     fn proyma_info(&self) -> (i32, i32, i32, i32) { (0, 0, 0, 0) } // cap_height, proyma_h, hem_half, after_proyma
 }
 
-/// Sleeve dimensions calculated from measurements
-#[derive(Debug, Clone, Default)]
-pub struct SleeveDimensions {
-    pub cuff_stitches: i32,
-    pub top_stitches: i32,
-    pub height_rows: i32,
-    pub shoulder_cut_rows: i32,
-    pub increase_rows: Vec<i32>,
-    pub cap_offset: f64,
-    pub slope_start_x: f64,
-    pub slope_end_x: f64,
+/// Common trait for both Raglan and Set-In calculations
+pub trait Calculation {
+    /// Get all nodes (for SVG rendering)
+    fn nodes(&self) -> &Vec<BlueprintNodePosition>;
+    
+    /// Get mutable reference to nodes
+    fn nodes_mut(&mut self) -> &mut Vec<BlueprintNodePosition>;
+    
+    /// Get viewbox width
+    fn viewbox_width(&self) -> i32;
+    
+    /// Get viewbox height
+    fn viewbox_height(&self) -> i32;
+    
+    /// Get neck width in stitches
+    fn neck_width_stitches(&self) -> i32;
+    
+    /// Get neck depth in rows
+    fn neck_depth_rows(&self) -> i32;
+    
+    /// Get sleeve cuff width in stitches
+    fn sleeve_cuff_stitches(&self) -> i32;
+    
+    /// Get sleeve top/widest width in stitches
+    fn sleeve_top_stitches(&self) -> i32;
+    
+    /// Get total garment rows
+    fn total_rows(&self) -> i32;
+    
+    /// Downcast to RaglanCalculation (returns None if SetIn)
+    fn as_raglan(&self) -> Option<&RaglanCalculation> { None }
+    
+    /// Downcast to SetInSleeveCalculation (returns None if Raglan)
+    fn as_set_in(&self) -> Option<&SetInSleeveCalculation> { None }
 }
+
+
+
+
