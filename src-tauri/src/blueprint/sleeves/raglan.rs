@@ -18,9 +18,15 @@ impl SleeveType for RaglanSleeve {
         let p = m.gauge_stitches_per_cm;
         let r = m.gauge_rows_per_cm;
         
+        // Ширина рукава вверху (обхват руки + прибавка)
         let sleeve_width = ((m.or_val + m.ease) * p).round() as i32;
+        
+        // Верх рукава после подрезов: ширина рукава минус 2 подреза
         let start_raglan = sleeve_width - dec_shoulder_st * 2;
-        let sleeve_cap = ((m.oh / 6.0) * p).round() as i32;
+        
+        // Для реглана: верх рукава = start_raglan (из черновика)
+        let sleeve_cap = start_raglan;
+        
         let sleeve_length = (m.dr * r).round() as i32;
         let sleeve_cut = sleeve_length - (m.dr * r - dec_shoulder_st as f64 * r).round() as i32;
         let cuff = ((m.oz * p).round() as i32).max(10);
@@ -28,9 +34,16 @@ impl SleeveType for RaglanSleeve {
         let total_inc = (start_raglan - cuff).max(0) / 2;
         let inc_rows = gen_sleeve_increases(total_inc, sleeve_length);
         
-        let cap_offset = if total_inc > 0 { (total_inc as f64 * 0.3).min(sleeve_cap as f64 * 0.15) } else { 0.0 };
-        let slope_start = sleeve_center_x() - sleeve_cap as f64 / 2.0;
-        let slope_end = sleeve_center_x() - cuff as f64 / 2.0;
+        // cap_offset - смещение вершины для визуального наклона (из черновика)
+        let cap_offset = if total_inc > 0 { 
+            (total_inc as f64 * 0.3).min(start_raglan as f64 * 0.15) 
+        } else { 
+            0.0 
+        };
+        
+        // slope_start_x и slope_end_x - половины ширины верха и низа (из черновика)
+        let slope_start_x = start_raglan as f64 / 2.0;
+        let slope_end_x = cuff as f64 / 2.0;
         
         SleeveDimensions {
             cuff_stitches: cuff,
@@ -39,8 +52,8 @@ impl SleeveType for RaglanSleeve {
             shoulder_cut_rows: sleeve_cut,
             increase_rows: inc_rows,
             cap_offset,
-            slope_start_x: slope_start,
-            slope_end_x: slope_end,
+            slope_start_x,
+            slope_end_x,
         }
     }
     
@@ -57,8 +70,9 @@ impl SleeveType for RaglanSleeve {
         let base_y = padding;
         let slope_drop = dims.cap_offset.max(6.0);
         
-        let half_cuff = dims.cuff_stitches as f64 / 2.0;
-        let half_top = dims.top_stitches as f64 / 2.0;
+        // half_cuff и half_top теперь берутся напрямую из slope_end_x и slope_start_x (которые уже в петлях/2)
+        let half_cuff = dims.slope_end_x;
+        let half_top = dims.slope_start_x;
         let half_cut = calc.decrease_shoulder_cuts as f64 / 2.0;
         
         vec![
@@ -95,8 +109,6 @@ impl SleeveType for RaglanSleeve {
         calc.sleeve_raglan_rows_back.clone()
     }
 }
-
-fn sleeve_center_x() -> f64 { 200.0 }
 
 fn gen_sleeve_increases(total: i32, height: i32) -> Vec<i32> {
     let mut rows = Vec::new();
