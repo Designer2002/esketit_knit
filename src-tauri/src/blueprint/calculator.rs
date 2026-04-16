@@ -89,7 +89,6 @@ impl BlueprintCalculator {
         let half_neck_front_st = ((m.oh / 2.0 / 2.0) * p).round() as i32;
         let rem = (neck_depth - half_neck_front_st).max(0) as f64;
 
-
         // === РУКАВ: вызываем полиморфный метод ===
         let dims = self.sleeve.calculate_sleeve(m, dec_shoulder);
 
@@ -340,13 +339,33 @@ impl BlueprintCalculator {
             back_shoulder_y + (neck_depth as f64 * 0.25),
             "back",
         ));
-        
 
         // === SLEEVES ===
         let sleeve_cx = (viewbox_w / 2) as f64;
         let sleeve_raglan_back = gen_sleeve_raglan_rows(&dims, true);
         let sleeve_raglan_front = gen_sleeve_raglan_rows(&dims, false);
 
+        let mut stitch_data = Vec::new();
+        let mut row_data = Vec::new();
+
+        for node in &nodes {
+            // Конвертируем координаты viewbox в петли/ряды
+            // Формула: петли = x / gauge_stitches_per_cm, ряды = (viewbox_height - y) / gauge_rows_per_cm
+            let stitches = node.x / p; // p = gauge_stitches_per_cm
+            let rows = (viewbox_h as f64 - node.y) / r; // r = gauge_rows_per_cm, инвертируем Y
+
+            stitch_data.push(BlueprintCoord {
+                node_name: node.node_name.clone(),
+                part_code: node.part_code.clone(),
+                value: stitches,
+            });
+
+            row_data.push(BlueprintCoord {
+                node_name: node.node_name.clone(),
+                part_code: node.part_code.clone(),
+                value: rows,
+            });
+        }
         // Создаём RaglanCalculation ОДИН раз
         let raglan_calc = RaglanCalculation {
             back_width_stitches: hem_stitches,
@@ -379,7 +398,9 @@ impl BlueprintCalculator {
             nodes: vec![],
             sleeve_raglan_rows_back: sleeve_raglan_back.clone(),
             sleeve_raglan_rows_front: sleeve_raglan_front.clone(),
-            neck_rem: rem
+            neck_rem: rem,
+            blueprint_stitch_data: stitch_data,
+            blueprint_row_data: row_data,
         };
 
         // Вызываем генерацию нод для рукава
@@ -683,6 +704,27 @@ impl BlueprintCalculator {
         // === SLEEVE NODES ===
         let sleeve_cx = (viewbox_w / 2) as f64;
 
+        let mut stitch_data = Vec::new();
+        let mut row_data = Vec::new();
+
+        for node in &nodes {
+            // Конвертируем координаты viewbox в петли/ряды
+            // Формула: петли = x / gauge_stitches_per_cm, ряды = (viewbox_height - y) / gauge_rows_per_cm
+            let stitches = node.x / p; // p = gauge_stitches_per_cm
+            let rows = (viewbox_h as f64 - node.y) / r; // r = gauge_rows_per_cm, инвертируем Y
+
+            stitch_data.push(BlueprintCoord {
+                node_name: node.node_name.clone(),
+                part_code: node.part_code.clone(),
+                value: stitches,
+            });
+
+            row_data.push(BlueprintCoord {
+                node_name: node.node_name.clone(),
+                part_code: node.part_code.clone(),
+                value: rows,
+            });
+        }
         // Создаём SetInSleeveCalculation
         let setin_calc = SetInSleeveCalculation {
             hem_width_stitches: hem_width,
@@ -716,6 +758,8 @@ impl BlueprintCalculator {
             waist_start_row: hip_len_rows,
             waist_end_row: back_len_rows,
             waist_point_row: (m.back_len / 2.0 * r).round() as i32,
+            blueprint_row_data: row_data,
+            blueprint_stitch_data: stitch_data
         };
 
         // Генерация нод рукава через полиморфный вызов
@@ -736,8 +780,8 @@ impl BlueprintCalculator {
 }
 
 // === Helper functions (без изменений) ===
-fn bp(name: &str, x: f64, y: f64, part: &str) -> BlueprintNodePosition {
-    BlueprintNodePosition {
+fn bp(name: &str, x: f64, y: f64, part: &str) -> BlueprintNode {
+    BlueprintNode {
         node_name: name.into(),
         x,
         y,
@@ -1137,11 +1181,11 @@ pub fn calculate_neckline_decreases(
     let part3 = half_neck_width_stitches / 4;
     let part1 = half_neck_width_stitches / 4;
 
-    // 1-я группа: закрываем всё за 1 ряд (подрез)
+    // 1-я группа: закрываем центральные петли (подрез) - происходит сразу в начале горловины
     if part1 > 0 {
         steps.push(DecreaseGroup {
             stitches: part1,
-            every_n_rows: 1,
+            every_n_rows: 0, // Мгновенное закрытие в ряду 0 (начало горловины)
             repeat_count: 1,
         });
     }
@@ -1202,12 +1246,13 @@ pub fn calculate_neckline_decreases(
     for group in &steps {
         for _ in 0..group.repeat_count {
             current_row += group.every_n_rows;
-            rows.push(current_row);
-            counts.push(group.stitches);
+            // Не выходим за пределы глубины горловины
+            if current_row <= neck_height_rows {
+                rows.push(current_row);
+                counts.push(group.stitches);
+            }
         }
     }
-
-    let rem = (neck_height_rows - half_neck_width_stitches).max(0);
 
     (rows, counts)
 }

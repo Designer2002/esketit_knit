@@ -56,16 +56,6 @@ fn default_hip_circ() -> f64 { 100.0 }
 fn default_back_len() -> f64 { 40.0 }
 fn default_hip_len() -> f64 { 20.0 }
 
-/// Node position for SVG rendering
-#[derive(Debug, Serialize, Deserialize, FromRow, Clone)]
-pub struct BlueprintNodePosition {
-    pub node_name: String,
-    pub x: f64,
-    pub y: f64,
-    pub part_code: String,
-    pub was_manually_moved: bool,
-}
-
 /// Full calculation result (RAGLAN)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RaglanCalculation {
@@ -100,7 +90,17 @@ pub struct RaglanCalculation {
     pub nodes: Vec<BlueprintNodePosition>,
     pub sleeve_raglan_rows_back: Vec<i32>,
     pub sleeve_raglan_rows_front: Vec<i32>,
-    pub neck_rem: f64
+    pub neck_rem: f64,
+    pub blueprint_stitch_data: Vec<BlueprintCoord>,  // x в петлях
+    pub blueprint_row_data: Vec<BlueprintCoord>,     // y в рядах
+}
+
+// 🔹 Вспомогательная структура для координат
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BlueprintCoord {
+    pub node_name: String,
+    pub part_code: String,
+    pub value: f64,  // петли (для stitch) или ряды (для row)
 }
 
 impl Calculation for RaglanCalculation {
@@ -114,6 +114,13 @@ impl Calculation for RaglanCalculation {
     fn sleeve_top_stitches(&self) -> i32 { self.sleeve_top_stitches }
     fn total_rows(&self) -> i32 { self.total_rows }
     fn as_raglan(&self) -> Option<&RaglanCalculation> { Some(self) }
+    fn blueprint_stitch_data(&self) -> &Vec<BlueprintCoord> {
+        &self.blueprint_stitch_data
+    }
+    fn blueprint_row_data(&self) -> &Vec<BlueprintCoord> {
+        &self.blueprint_row_data
+    }
+    
 }
 
 /// Full calculation result (SET-IN SLEEVE)
@@ -159,6 +166,9 @@ pub struct SetInSleeveCalculation {
     pub waist_start_row: i32,                // Ряд начала убавок (от подола)
     pub waist_end_row: i32,                  // Ряд конца убавок (талия)
     pub waist_point_row: i32,                // Ряд линии талии
+
+    pub blueprint_stitch_data: Vec<BlueprintCoord>,  // x в петлях
+    pub blueprint_row_data: Vec<BlueprintCoord>,     // y в рядах
 }
 
 impl Calculation for SetInSleeveCalculation {
@@ -172,6 +182,14 @@ impl Calculation for SetInSleeveCalculation {
     fn sleeve_top_stitches(&self) -> i32 { self.sleeve_widest_stitches }
     fn total_rows(&self) -> i32 { self.total_garment_rows }
     fn as_set_in(&self) -> Option<&SetInSleeveCalculation> { Some(self) }
+    
+    fn blueprint_stitch_data(&self) -> &Vec<BlueprintCoord> {
+        &self.blueprint_stitch_data
+    }
+    
+    fn blueprint_row_data(&self) -> &Vec<BlueprintCoord> {
+        &self.blueprint_row_data
+    }
 }
 
 /// Unified calculation result (either Raglan or Set-In)

@@ -1,289 +1,300 @@
-import { useRef, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 import "./Sweater3D.css";
 
-// ===== Создаём текстуру вязки =====
-function createKnitTexture(color) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, 256, 256);
-
-  // Горизонтальные линии вязки
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
-  ctx.lineWidth = 2;
-  for (let y = 0; y < 256; y += 8) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(256, y);
-    ctx.stroke();
-  }
-
-  // Вертикальные линии вязки
-  for (let x = 0; x < 256; x += 6) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, 256);
-    ctx.stroke();
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(4, 6);
-
-  return texture;
-}
-
-// ===== ЭМУЛЯЦИЯ RUST РАСЧЁТОВ ДЛЯ M =====
-const RAGLAN_PARAMS_M = {
-  back_width_stitches: 235,
-  front_width_stitches: 235,
-  neck_width_stitches: 48,
-  total_rows: 180,
-  decrease_shoulder_cuts: 18,
-  neck_depth_rows: 22,
-  sleeve_shoulder_cut_rows: 52,
-  sleeve_top_stitches: 62,
-  sleeve_cuff_stitches: 32,
-  sleeve_cap_offset: 8,
-  viewbox_width: 650,
-  viewbox_height: 240,
+// ===== БАЗОВЫЕ МЕРКИ =====
+const SIZE_M_DEFAULTS = {
+  og: 94,
+  dr: 60,
+  oz: 16,
+  or_val: 32,
+  di: 62,
+  glg: 8,
+  oh: 58,
+  ease: 6,
+  gauge_stitches_per_cm: 2.5,
+  gauge_rows_per_cm: 3.5,
 };
 
-// ===== Построение путей =====
-function buildRaglanPaths(params) {
-  const {
-    back_width_stitches, total_rows, neck_width_stitches, neck_depth_rows,
-    decrease_shoulder_cuts, viewbox_height, viewbox_width,
-    sleeve_shoulder_cut_rows, sleeve_top_stitches, sleeve_cuff_stitches,
-    sleeve_cap_offset
-  } = params;
+// ===== Текстура (кэшируем снаружи) =====
+const knitTexture = new THREE.TextureLoader().load(
+  "/textures/knit_specular.png",
+);
+knitTexture.wrapS = THREE.RepeatWrapping;
+knitTexture.wrapT = THREE.RepeatWrapping;
+knitTexture.repeat.set(3, 4);
 
-  const hemY = viewbox_height - 20;
-  const underarmY = total_rows * 0.72;
-  const rowToY = (row) => hemY - row;
-
-  // === СПИНКА ===
-  const backCenterX = viewbox_width * 0.75;
-  const backLeftX = backCenterX - back_width_stitches / 2;
-  const backRightX = backCenterX + back_width_stitches / 2;
-  const neckLeftX = backCenterX - neck_width_stitches / 2;
-  const neckRightX = backCenterX + neck_width_stitches / 2;
-  const underarmDx = decrease_shoulder_cuts;
-
-  const backPath = new THREE.ShapePath();
-  backPath.moveTo(backLeftX, hemY);
-  backPath.lineTo(backLeftX, underarmY);
-  backPath.lineTo(backLeftX + underarmDx, underarmY);
-
-  const backNeckDepth = neck_depth_rows * 0.25;
-  const backNeckY = rowToY(total_rows);
-  const backNeckLow = backNeckY + backNeckDepth;
-  backPath.quadraticCurveTo(backCenterX, backNeckLow, neckRightX, backNeckY);
-
-  backPath.lineTo(backRightX - underarmDx, underarmY);
-  backPath.lineTo(backRightX, underarmY);
-  backPath.lineTo(backRightX, hemY);
-  backPath.currentPath.closePath();
-
-  // === ПЕРЕД ===
-  const frontCenterX = viewbox_width * 0.25;
-  const frontLeftX = frontCenterX - back_width_stitches / 2;
-  const frontRightX = frontCenterX + back_width_stitches / 2;
-  const frontNeckLeftX = frontCenterX - neck_width_stitches / 2;
-  const frontNeckRightX = frontCenterX + neck_width_stitches / 2;
-
-  const frontPath = new THREE.ShapePath();
-  frontPath.moveTo(frontLeftX, hemY);
-  frontPath.lineTo(frontLeftX, underarmY);
-  frontPath.lineTo(frontLeftX + underarmDx, underarmY);
-
-  const frontNeckY = rowToY(total_rows);
-  const frontNeckLow = frontNeckY + neck_depth_rows * 0.65;
-  frontPath.quadraticCurveTo(frontCenterX, frontNeckLow, frontNeckRightX, frontNeckY);
-
-  frontPath.lineTo(frontRightX - underarmDx, underarmY);
-  frontPath.lineTo(frontRightX, underarmY);
-  frontPath.lineTo(frontRightX, hemY);
-  frontPath.currentPath.closePath();
-
-  // === РУКАВ ===
-  const cx = viewbox_width / 2;
-  const cuffY = total_rows + 40;
-  const baseTopY = 40;
-  const cutY = sleeve_shoulder_cut_rows + 40;
-
-  const cuffW = sleeve_cuff_stitches;
-  const topW = sleeve_top_stitches;
-  const slopeDrop = Math.max(sleeve_cap_offset, 6);
-
-  const leftCuff = cx - cuffW / 2;
-  const rightCuff = cx + cuffW / 2;
-  const leftCut = cx - topW / 2 + underarmDx;
-  const rightCut = cx + topW / 2 - underarmDx;
-
-  const sleevePath = new THREE.ShapePath();
-  sleevePath.moveTo(leftCuff, cuffY);
-  sleevePath.lineTo(leftCut, cutY);
-  sleevePath.lineTo(leftCut + underarmDx, cutY);
-  sleevePath.lineTo(cx - topW / 2, baseTopY);
-  sleevePath.lineTo(cx + topW / 2, baseTopY + slopeDrop);
-  sleevePath.lineTo(rightCut, cutY);
-  sleevePath.lineTo(rightCut + underarmDx, cutY);
-  sleevePath.lineTo(rightCuff, cuffY);
-  sleevePath.currentPath.closePath();
-
-  return { backPath, frontPath, sleevePath, underarmY, hemY, cutY };
-}
-
-// ===== Экструдированная деталь =====
-function ExtrudedPart({ path, position, rotation, scale, color, thickness = 1.2 }) {
-  const geometry = useMemo(() => {
-    const shape = path.toShapes(false)[0];
-    return new THREE.ExtrudeGeometry(shape, {
-      steps: 1,
-      depth: thickness,
-      bevelEnabled: true,
-      bevelThickness: 0.2,
-      bevelSize: 0.15,
-      bevelSegments: 1,
+// ===== Вспомогательные функции =====
+const sortByNum = (arr, prefix) =>
+  arr
+    .filter((n) => n.node_name?.trim().startsWith(prefix))
+    .sort((a, b) => {
+      const na = parseFloat(a.node_name.trim().replace(prefix, "")) || 0;
+      const nb = parseFloat(b.node_name.trim().replace(prefix, "")) || 0;
+      return na - nb;
     });
-  }, [path, thickness]);
 
-  const texture = useMemo(() => createKnitTexture(color), [color]);
+const getNode = (group, name) =>
+  group?.find((n) => n.node_name?.trim() === name);
 
-  const box = new THREE.Box3().setFromObject(new THREE.Mesh(geometry));
-  const size = box.getSize(new THREE.Vector3());
-  texture.repeat.set(size.x * 0.04, size.y * 0.04);
+// ===== ПОСТРОЕНИЕ ПЛОСКОЙ ВЫКРОЙКИ (единый контур) =====
+// Схема: [Рукав Л] — [Спинка] — [Перед] — [Рукав П]
+function buildFlatPattern(nodes) {
+  const grouped = {};
+  nodes.forEach((node) => {
+    const part = node.part_code?.trim();
+    if (!grouped[part]) grouped[part] = [];
+    grouped[part].push(node);
+  });
 
-  return (
-    <mesh geometry={geometry} position={position} rotation={rotation} scale={scale}>
-      <meshStandardMaterial
-        map={texture}
-        color="#ffffff"
-        roughness={0.75}
-        metalness={0.05}
-        side={THREE.DoubleSide}
-      />
-    </mesh>
-  );
+  const back = grouped["back"] || [];
+  const front = grouped["front"] || [];
+  const sleeveL = grouped["sleeve_left"] || [];
+  const sleeveR = grouped["sleeve_right"] || [];
+
+  // Ключевые точки
+  const b = {
+    hem_l: getNode(back, "back_left_hem"),
+    cut_l: getNode(back, "back_left_cut"),
+    underarm_l: getNode(back, "back_left_underarm"),
+    shoulders_l: sortByNum(back, "back_left_shoulder_").reverse(),
+    neck_left: getNode(back, "back_neck_left"),
+    neck_right: getNode(back, "back_neck_right"),
+    shoulders_r: sortByNum(back, "back_right_shoulder_"),
+    underarm_r: getNode(back, "back_right_underarm"),
+    cut_r: getNode(back, "back_right_cut"),
+    hem_r: getNode(back, "back_right_hem"),
+  };
+
+  const f = {
+    hem_l: getNode(front, "front_left_hem"),
+    cut_l: getNode(front, "front_left_cut"),
+    underarm_l: getNode(front, "front_left_underarm"),
+    shoulders_l: sortByNum(front, "front_left_shoulder_").reverse(),
+    neck_l: getNode(front, "front_neck_left"),
+    neck_left: sortByNum(front, "front_left_neck_"),
+    neck_center: getNode(front, "front_neck_center"),
+    neck_right: sortByNum(front, "front_right_neck_").reverse(),
+    neck_r: getNode(front, "front_neck_right"),
+    shoulders_r: sortByNum(front, "front_right_shoulder_"),
+    underarm_r: getNode(front, "front_right_underarm"),
+    cut_r: getNode(front, "front_right_cut"),
+    hem_r: getNode(front, "front_right_hem"),
+  };
+
+  const sL = {
+    cuff_l: getNode(sleeveL, "sleeve_cuff_left"),
+    cut_l: getNode(sleeveL, "sleeve_cut_left"),
+    underarm_l: getNode(sleeveL, "sleeve_underarm_left"),
+    top_l: getNode(sleeveL, "sleeve_top_left"),
+    top_r: getNode(sleeveL, "sleeve_top_right"),
+    underarm_r: getNode(sleeveL, "sleeve_underarm_right"),
+    cut_r: getNode(sleeveL, "sleeve_cut_right"),
+    cuff_r: getNode(sleeveL, "sleeve_cuff_right"),
+  };
+
+  const sR = {
+    cuff_l: getNode(sleeveR, "sleeve_cuff_left"),
+    cut_l: getNode(sleeveR, "sleeve_cut_left"),
+    underarm_l: getNode(sleeveR, "sleeve_underarm_left"),
+    top_l: getNode(sleeveR, "sleeve_top_right"),
+    top_r: getNode(sleeveR, "sleeve_top_left"),
+    underarm_r: getNode(sleeveR, "sleeve_underarm_right"),
+    cut_r: getNode(sleeveR, "sleeve_cut_right"),
+    cuff_r: getNode(sleeveR, "sleeve_cuff_right"),
+  };
+
+  // Смещения для соединения по линии реглана
+  const shoulderL_back = b.shoulders_l[0]; // верхняя точка левого плеча спинки
+
+  // Строим единый контур
+  const path = new THREE.ShapePath();
+  let started = false;
+  const add = (x, y) => {
+    if (!started) {
+      path.moveTo(x, y);
+      started = true;
+    } else path.lineTo(x, y);
+  };
+
+  if (b.hem_l) add(b.hem_l.x, b.hem_l.y);
+  if (b.cut_l) add(b.cut_l.x, b.cut_l.y);
+  if (b.underarm_l) add(b.underarm_l.x, b.underarm_l.y);
+  b.shoulders_l.forEach((p) => add(p.x, p.y));
+  if (b.neck_l) add(b.neck_l.x, b.neck_l.y);
+  if (b.neck_r) add(b.neck_r.x, b.neck_r.y);
+  b.shoulders_r.forEach((p) => add(p.x, p.y));
+  if (b.underarm_r) add(b.underarm_r.x, b.underarm_r.y);
+  if (b.cut_r) add(b.cut_r.x, b.cut_r.y);
+  if (b.hem_r) add(b.hem_r.x, b.hem_r.y);
+
+  const f_offset = 73;
+  if (f.hem_l) add(f.hem_l.x + f_offset, f.hem_l.y);
+  if (f.cut_l) add(f.cut_l.x + f_offset, f.cut_l.y);
+  if (f.underarm_l) add(f.underarm_l.x + f_offset, f.underarm_l.y);
+  f.shoulders_l.forEach((p) => add(p.x + f_offset, p.y));
+  if (f.neck_l) add(f.neck_l.x + f_offset, f.neck_l.y);
+  f.neck_left.forEach((p) => add(p.x + f_offset, p.y));
+  f.neck_right.forEach((p) => add(p.x + f_offset, p.y));
+  if (f.neck_r) add(f.neck_r.x + f_offset, f.neck_r.y);
+  f.shoulders_r.forEach((p) => add(p.x + f_offset, p.y));
+  if (f.underarm_r) add(f.underarm_r.x + f_offset, f.underarm_r.y);
+  if (f.cut_r) add(f.cut_r.x + f_offset, f.cut_r.y);
+  if (f.hem_r) add(f.hem_r.x + f_offset, f.hem_r.y);
+
+  path.currentPath?.closePath();
+
+  // Линия сгиба (по центру, через плечевые точки)
+  const foldY = shoulderL_back?.y || 100;
+  const bounds = {
+    minX: Math.min(...nodes.map((n) => n.x)),
+    maxX: Math.max(...nodes.map((n) => n.x)),
+    minY: Math.min(...nodes.map((n) => n.y)),
+    maxY: Math.max(...nodes.map((n) => n.y)),
+  };
+
+  return { path, foldY, bounds };
 }
 
-// ===== Реглан свитер - СОБРАННАЯ МОДЕЛЬ =====
-function RaglanSweater({ calculation, color }) {
-  const params = { ...RAGLAN_PARAMS_M, ...calculation };
-  const { backPath, frontPath, sleevePath, underarmY, hemY, cutY } = useMemo(
-    () => buildRaglanPaths(params),
-    [params]
+// ===== Плоская выкройка с анимацией сгиба =====
+function FlatSweater({ color, nodes = [], folded = true, foldAmount = 0.6 }) {
+  const meshRef = useRef();
+  const { path, foldY, bounds } = useMemo(
+    () => buildFlatPattern(nodes),
+    [nodes],
   );
 
+  const geometry = useMemo(() => {
+    if (!path) return null;
+    const shapes = path.toShapes(false);
+    if (!shapes.length) return null;
+    return new THREE.ExtrudeGeometry(shapes[0], {
+      steps: 1,
+      depth: 0.25,
+      bevelEnabled: false,
+    });
+  }, [path]);
+
+  // Анимация сгиба
+  useFrame((_, delta) => {
+    if (meshRef.current && folded) {
+      const t = (Math.sin(Date.now() * 0.001) + 1) * 0.5;
+      meshRef.current.rotation.x = t * Math.PI * 0.35 * foldAmount;
+      meshRef.current.position.y = -foldY * 0.075 * 0.5;
+    } else if (meshRef.current) {
+      meshRef.current.rotation.x = 0;
+      meshRef.current.position.y = 0;
+    }
+  });
+
+  if (!geometry) return null;
+
+  // Центрирование
+  const centerX = bounds ? (bounds.minX + bounds.maxX) / 2 : 0;
+  const centerY = bounds ? (bounds.minY + bounds.maxY) / 2 : 0;
   const SCALE = 0.075;
-  const THICKNESS = 1.0;
-  
-  // Центрируем модель
-  const centerY = -hemY * SCALE / 2;
-  
-  // Позиция проймы для рукавов
-  const armholeY = -underarmY * SCALE;
-  
-  // Ширина тела
-  const bodyWidth = params.back_width_stitches * SCALE;
-  const halfWidth = bodyWidth / 2;
-  
-  // Угол наклона реглан-рукава
-  const sleeveAngle = 0.35; // ~20 градусов
 
   return (
-    <group position={[0, centerY, 0]}>
-      {/* ТЕЛО - Спинка (сзади) */}
-      <ExtrudedPart
-        path={backPath}
-        position={[0, 0, -THICKNESS * 0.6]}
-        rotation={[0, 0, 0]}
-        scale={[SCALE, -SCALE, 1]}
-        color={color}
-        thickness={THICKNESS}
-      />
+    <group ref={meshRef} position={[-centerX * SCALE, -centerY * SCALE, 0]}>
+      <mesh geometry={geometry} scale={[SCALE, -SCALE, 1]}>
+        <meshStandardMaterial
+          map={knitTexture}
+          color={color}
+          roughness={0.85}
+          metalness={0.02}
+          side={THREE.DoubleSide}
+          transparent
+          opacity={0.95}
+        />
+      </mesh>
 
-      {/* ТЕЛО - Перед (спереди) */}
-      <ExtrudedPart
-        path={frontPath}
-        position={[0, 0, THICKNESS * 0.6]}
-        rotation={[0, 0, 0]}
-        scale={[SCALE, -SCALE, 1]}
-        color={color}
-        thickness={THICKNESS}
-      />
-
-      {/* ЛЕВЫЙ РУКАВ - втачан в пройму с наклоном */}
-      <group position={[-halfWidth * 0.85, armholeY * 0.85, 0]}>
-        <group rotation={[0.15, Math.PI / 2, -sleeveAngle]}>
-          <ExtrudedPart
-            path={sleevePath}
-            position={[0, 0, 0]}
-            rotation={[0, 0, Math.PI / 2]}
-            scale={[SCALE * 0.9, -SCALE * 0.9, 1]}
-            color={color}
-            thickness={THICKNESS * 0.7}
+      {/* Линия сгиба (визуальный маркер) */}
+      {folded && (
+        <mesh position={[0, (-foldY + centerY) * SCALE, 0.15]}>
+          <boxGeometry
+            args={[(bounds?.maxX - bounds?.minX) * SCALE * 0.98, 0.3, 0.1]}
           />
-        </group>
-      </group>
-
-      {/* ПРАВЫЙ РУКАВ - втачан в пройму с наклоном */}
-      <group position={[halfWidth * 0.85, armholeY * 0.85, 0]}>
-        <group rotation={[0.15, -Math.PI / 2, sleeveAngle]}>
-          <ExtrudedPart
-            path={sleevePath}
-            position={[0, 0, 0]}
-            rotation={[0, 0, -Math.PI / 2]}
-            scale={[SCALE * 0.9, -SCALE * 0.9, 1]}
-            color={color}
-            thickness={THICKNESS * 0.7}
-          />
-        </group>
-      </group>
+          <meshBasicMaterial color="#ff4444" transparent opacity={0.7} />
+        </mesh>
+      )}
     </group>
   );
 }
 
-// ===== Main 3D Preview =====
-export function Sweater3DPreview({ calculation, sleeveType = "raglan", height = 300 }) {
-  const yarnColor = calculation?.yarn_color || "#4A90D9";
+// ===== Main Preview =====
+export function Sweater3DPreview({
+  height = 400,
+  yarnColor = "#4A90D9",
+  folded = false, // показать сложенную выкройку
+  foldAmount = 0.6, // сила сгиба (0-1)
+  autoRotate = false,
+  nodes = [],
+  stitchData = [],
+  rowData = [], 
+}) {
+  const cameraDistance = 60;
+  const convertedNodes = useMemo(() => {
+    if (stitchData.length === 0 || rowData.length === 0) return nodes;
+
+    // Создаём мап для быстрого поиска
+    const stitchMap = new Map(stitchData.map((d) => [d.node_name, d.value]));
+    const rowMap = new Map(rowData.map((d) => [d.node_name, d.value]));
+
+    return nodes.map((node) => {
+      const stitches = stitchMap.get(node.node_name) ?? node.x / 2.5; // fallback
+      const rows = rowMap.get(node.node_name) ?? (270 - node.y) / 3.5; // fallback
+
+      return {
+        ...node,
+        // 🔹 Используем "чистые" координаты в петлях/рядах
+        stitch_x: stitches,
+        row_y: rows,
+      };
+    });
+  }, [nodes, stitchData, rowData]);
+
+  // ===== Дальше используем convertedNodes для построения путей =====
+  const paths = useMemo(
+    () => buildPathsFromNodes(convertedNodes),
+    [convertedNodes],
+  );
 
   return (
     <div className="sweater-3d-container" style={{ height: `${height}px` }}>
       <Canvas
-        camera={{ position: [0, 0, 35], fov: 40 }}
-        style={{ background: "transparent" }}
+        camera={{ position: [0, 0, cameraDistance], fov: 25 }}
+        style={{ background: "#fafafa" }}
         dpr={[1, 2]}
       >
-        <ambientLight intensity={0.6} />
+        <ambientLight intensity={0.8} />
         <directionalLight position={[20, 30, 20]} intensity={1.5} />
         <directionalLight position={[-20, 15, -20]} intensity={0.5} />
-        <pointLight position={[0, 10, 15]} intensity={0.6} />
 
-        {sleeveType === 'raglan' ? (
-          <RaglanSweater calculation={calculation} color={yarnColor} />
-        ) : (
-          <RaglanSweater calculation={calculation} color={yarnColor} />
-        )}
+        <FlatSweater
+          color={yarnColor}
+          nodes={nodes}
+          folded={folded}
+          foldAmount={foldAmount}
+        />
 
-        <ContactShadows position={[0, -15, 0]} opacity={0.35} scale={50} blur={2} far={25} />
-        <Environment preset="apartment" />
+        <ContactShadows
+          position={[0, -30, 0]}
+          opacity={0.25}
+          scale={80}
+          blur={2}
+          far={40}
+        />
+        <Environment preset="studio" />
 
         <OrbitControls
-          enablePan={false}
-          minDistance={15}
-          maxDistance={60}
-          autoRotate
-          autoRotateSpeed={1.2}
+          enablePan={true}
+          minDistance={30}
+          maxDistance={150}
+          autoRotate={autoRotate}
           enableZoom={true}
+          enableDamping={true}
         />
       </Canvas>
     </div>

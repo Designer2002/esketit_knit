@@ -1730,6 +1730,7 @@ pub async fn get_project_sleeve_type(
     project_id: i64,
     pool: tauri::State<'_, SqlitePool>,
 ) -> Result<String, String> {
+    // Сначала пробуем получить sleeve_type напрямую
     let sleeve_type: Option<String> = sqlx::query_scalar(
         "SELECT sleeve_type FROM projects WHERE id = ?"
     )
@@ -1738,6 +1739,33 @@ pub async fn get_project_sleeve_type(
     .await
     .map_err(|e| format!("Failed to fetch sleeve type: {}", e))?;
     
+    // Если есть сохраненный тип и он не дефолтный - возвращаем его
+    if let Some(ref st) = sleeve_type {
+        if st != "raglan" {
+            return Ok(st.clone());
+        }
+    }
+    
+    // Определяем тип рукава по garment_type_id
+    let garment_type_name: Option<String> = sqlx::query_scalar(
+        "SELECT gt.name FROM projects p 
+         JOIN garment_types gt ON p.garment_type_id = gt.id 
+         WHERE p.id = ?"
+    )
+    .bind(project_id)
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(|e| format!("Failed to fetch garment type: {}", e))?;
+    
+    if let Some(name) = garment_type_name {
+        if name.contains("Втачной") {
+            return Ok("set_in".to_string());
+        } else if name.contains("Реглан") {
+            return Ok("raglan".to_string());
+        }
+    }
+    
+    // Fallback к значению из колонки или дефолтному
     Ok(sleeve_type.unwrap_or_else(|| "raglan".to_string()))
 }
 

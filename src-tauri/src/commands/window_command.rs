@@ -14,7 +14,12 @@ pub async fn open_start_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("start") {
         let _ = window.close();
     }
-    
+    if let Some(window) = app.get_webview_window("create_project") {
+        let _ = window.close();
+    }
+    if let Some(window) = app.get_webview_window("open_project") {
+        let _ = window.close();
+    }
     // Если есть окно editor - закрываем его
     if let Some(window) = app.get_webview_window("editor") {
         let _ = window.close();
@@ -23,7 +28,7 @@ pub async fn open_start_window(app: AppHandle) -> Result<(), String> {
     // Создаём главное окно
     let _window = WebviewWindowBuilder::new(&app, "main", WebviewUrl::App("#/".into()))
         .title("EsketitKnit - Главная")
-        .inner_size(900.0, 700.0)
+        .inner_size(1200.0, 800.0)
         .resizable(false)
         .build()
         .map_err(|e| format!("Failed to create main window: {}", e))?;
@@ -53,7 +58,7 @@ pub async fn open_create_project_window(
     let window =
         WebviewWindowBuilder::new(&app, "start", WebviewUrl::App("#/create_project".into()))
             .title("Создание проекта")
-            .inner_size(800.0, 700.0)
+            .inner_size(1200.0, 800.0)
             .resizable(false)
             .build()
             .map_err(|e| format!("Failed to create window: {}", e))?;
@@ -100,7 +105,7 @@ pub async fn open_project_window(
         WebviewUrl::App("#/open_project".into()),
     )
     .title("Открыть проект")
-    .inner_size(900.0, 700.0)
+    .inner_size(1200.0, 800.0)
     .resizable(true)
     .build()
     .map_err(|e| format!("Failed to create window: {}", e))?;
@@ -112,21 +117,38 @@ pub async fn open_project_window(
 pub async fn open_project_editor(app: AppHandle, project_id: i64) -> Result<(), String> {
     let window_label = "editor";
 
-    // Окно уже открыто — просто фокусируем
+    // Окно уже открыто — просто обновляем URL и фокусируем
     if let Some(window) = app.get_webview_window(&window_label) {
+        // Navigate to the new project
+        window
+            .eval(&format!("window.location.hash = '#/editor/{}';", project_id))
+            .ok();
         window.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
 
-    // Закрываем старое окно если есть
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.close();
-    } else if let Some(w) = app.get_webview_window("start") {
-        let _ = w.close();
-    } else if let Some(w) = app.get_webview_window("open_project") {
-        let _ = w.close();
+    // Если есть окно "start" (create_project) - ПЕРЕИСПОЛЬЗУЕМ его вместо создания нового
+    if let Some(start_window) = app.get_webview_window("start") {
+        // Просто навигируем на editor в том же окне
+        start_window
+            .eval(&format!("window.location.hash = '#/editor/{}';", project_id))
+            .map_err(|e| format!("Failed to navigate: {}", e))?;
+        start_window.set_title("Редактор проекта").ok();
+        start_window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
     }
 
+    // Если есть окно "main" - ПЕРЕИСПОЛЬЗУЕМ его
+    if let Some(main_window) = app.get_webview_window("main") {
+        main_window
+            .eval(&format!("window.location.hash = '#/editor/{}';", project_id))
+            .map_err(|e| format!("Failed to navigate: {}", e))?;
+        main_window.set_title("Редактор проекта").ok();
+        main_window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    // Создаём новое окно только если нет других окон
     let _window = tauri::WebviewWindowBuilder::new(
         &app,
         window_label,

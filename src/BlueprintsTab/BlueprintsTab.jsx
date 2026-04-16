@@ -428,7 +428,6 @@ function BlueprintSVG({
     };
 
     if (partCode === "back") {
-      console.log(calculation.type)
       // For set_in, collect ALL detailed points
       if (calculation.type === "set_in") {
         const hemL = getNodePos("back_left_hem");
@@ -559,7 +558,7 @@ function BlueprintSVG({
         path += ` L ${cutL.x} ${cutL.y}`;
         path += ` L ${underarmL.x} ${underarmL.y}`;
         shoulderLDefault.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        path += ` L ${neckL[0].x} ${neckY.y}`;
         // Neckline - different for V vs U
         if (necklineType === "V" && neckC) {
           // V-neck: straight diagonal lines, skip intermediate decrease points
@@ -571,7 +570,7 @@ function BlueprintSVG({
           
         } else {
           // U-neck: use all neck decrease points for rounded shape
-          path += ` L ${neckL[0].x} ${neckY.y}`;
+          
           neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
          neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
    

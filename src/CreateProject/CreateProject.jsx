@@ -45,6 +45,40 @@ export default function CreateProject() {
   const [newDirName, setNewDirName] = useState("");
   const [showAddDirInput, setShowAddDirInput] = useState(false);
 
+  // ===== Добавляем состояние для рассчитанных данных =====
+  const [calculatedData, setCalculatedData] = useState(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // ===== Функция запроса расчёта =====
+  const fetchCalculatedBlueprint = useCallback(async (garmentTypeId) => {
+    if (!garmentTypeId) return;
+
+    setIsCalculating(true);
+    try {
+      // Вызываем Tauri command для расчёта
+      const result = await invoke("calculate_blueprint", {
+        projectId: 0, // временный ID для расчёта без проекта
+        sleeveType: "raglan",
+      });
+
+      // result содержит nodes + blueprint_stitch_data + blueprint_row_data
+      setCalculatedData(result);
+    } catch (error) {
+      console.error("Failed to calculate blueprint:", error);
+      // Fallback: используем дефолтные данные размера M
+      setCalculatedData(null);
+    } finally {
+      setIsCalculating(false);
+    }
+  }, []);
+
+  // ===== При смене выбранного типа изделия =====
+  useEffect(() => {
+    if (selectedOption?.db_id) {
+      fetchCalculatedBlueprint(selectedOption.db_id);
+    }
+  }, [selectedOption?.db_id, fetchCalculatedBlueprint]);
+
   // ===== Загрузка типов изделий из БД =====
   const loadGarmentTypes = useCallback(async () => {
     try {
@@ -69,13 +103,31 @@ export default function CreateProject() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isLoadingTypes && garmentTypes.length > 0 && !selectedOption) {
+      // Ищем тип "Реглан прямой" или первый доступный реглан
+      const defaultRaglan =
+        garmentTypes.find(
+          (t) =>
+            t.title?.toLowerCase().includes("реглан") &&
+            t.title?.toLowerCase().includes("прямой"),
+        ) ||
+        garmentTypes.find((t) => t.title?.toLowerCase().includes("реглан")) ||
+        garmentTypes[0];
+
+      if (defaultRaglan) {
+        setSelectedOption(defaultRaglan);
+      }
+    }
+  }, [isLoadingTypes, garmentTypes, selectedOption]);
+
   // ===== Выбор директории через диалог =====
   const handleSelectDirectory = async () => {
     try {
       const selected = await open({
         title: "Выберите директорию для проекта",
         multiple: false,
-        directory: true
+        directory: true,
       });
 
       if (selected) {
@@ -103,9 +155,8 @@ export default function CreateProject() {
       await invoke("create_dir", { path: newDirPath });
       setNewDirName("");
       setShowAddDirInput(false);
-      setSelectedDirForNewFolder(newDirPath+"/"+newDirName);
+      setSelectedDirForNewFolder(newDirPath + "/" + newDirName);
       addToast(`Папка "${newDirName}" создана!`, "success");
-
     } catch (error) {
       console.error("Error creating directory:", error);
       addToast(`Ошибка: ${error}`, "error");
@@ -147,7 +198,9 @@ export default function CreateProject() {
   }, []);
 
   // ===== Загрузка типов изделий =====
-  useEffect(() => { loadGarmentTypes(); }, [loadGarmentTypes]);
+  useEffect(() => {
+    loadGarmentTypes();
+  }, [loadGarmentTypes]);
 
   // ===== Применение темы =====
   useEffect(() => {
@@ -172,7 +225,9 @@ export default function CreateProject() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function toggleDropdown() { setIsOpen((prev) => !prev); }
+  function toggleDropdown() {
+    setIsOpen((prev) => !prev);
+  }
 
   function setSelectedContent(option) {
     if (!option) {
@@ -188,7 +243,9 @@ export default function CreateProject() {
         <h2>{option.title}</h2>
         <p>{option.description}</p>
         {option.db_id && (
-          <small style={{ opacity: 0.7, display: "block", marginTop: "0.5rem" }}>
+          <small
+            style={{ opacity: 0.7, display: "block", marginTop: "0.5rem" }}
+          >
             ID типа: {option.db_id}
           </small>
         )}
@@ -215,7 +272,16 @@ export default function CreateProject() {
         setHighlightedIndex((idx) => (idx > 0 ? idx - 1 : garmentTypes.length));
         event.preventDefault();
       } else if (event.key === "Enter" && highlightedIndex >= 0) {
-        onOptionSelect(highlightedIndex < garmentTypes.length ? garmentTypes[highlightedIndex] : { value: "custom", title: "Другое изделие", description: "Создать вручную", db_id: null });
+        onOptionSelect(
+          highlightedIndex < garmentTypes.length
+            ? garmentTypes[highlightedIndex]
+            : {
+                value: "custom",
+                title: "Другое изделие",
+                description: "Создать вручную",
+                db_id: null,
+              },
+        );
         event.preventDefault();
       } else if (event.key === "Escape") {
         setIsOpen(false);
@@ -227,7 +293,11 @@ export default function CreateProject() {
 
   return (
     <>
-      <div className="app-container" role="main" aria-label="Application Main Container">
+      <div
+        className="app-container"
+        role="main"
+        aria-label="Application Main Container"
+      >
         {/* Back Button */}
         <button
           className="btn-back-global"
@@ -257,13 +327,17 @@ export default function CreateProject() {
             />
             {projectName.trim() && (
               <small className="project-name-hint">
-                Файл будет сохранён как: <strong>{projectName.trim()}.esketit</strong>
+                Файл будет сохранён как:{" "}
+                <strong>{projectName.trim()}.esketit</strong>
               </small>
             )}
           </div>
 
           <div className="project-description-wrapper">
-            <label htmlFor="project-description-input" className="project-description-label">
+            <label
+              htmlFor="project-description-input"
+              className="project-description-label"
+            >
               Описание проекта
             </label>
             <textarea
@@ -277,7 +351,9 @@ export default function CreateProject() {
             />
           </div>
 
-          <label id="select-heading" htmlFor="dropdown-button">Выберите изделие</label>
+          <label id="select-heading" htmlFor="dropdown-button">
+            Выберите изделие
+          </label>
           <div className="dropdown-wrapper" ref={dropdownRef}>
             <button
               className={`dropdown-button${isOpen ? " open" : ""}`}
@@ -289,23 +365,46 @@ export default function CreateProject() {
               aria-labelledby="select-heading"
               id="dropdown-button"
             >
-              <span>{selectedOption ? selectedOption.title : "Выберите изделие"}</span>
-              <span className="arrow" aria-hidden="true">▾</span>
+              <span>
+                {selectedOption ? selectedOption.title : "Выберите изделие"}
+              </span>
+              <span className="arrow" aria-hidden="true">
+                ▾
+              </span>
             </button>
 
             {isOpen && (
-              <ul className="dropdown-list" role="listbox" aria-labelledby="select-heading" tabIndex={-1}>
+              <ul
+                className="dropdown-list"
+                role="listbox"
+                aria-labelledby="select-heading"
+                tabIndex={-1}
+              >
                 {isLoadingTypes ? (
-                  <li className="dropdown-item" style={{ fontStyle: "italic", opacity: 0.7 }}>Загрузка типов изделий...</li>
+                  <li
+                    className="dropdown-item"
+                    style={{ fontStyle: "italic", opacity: 0.7 }}
+                  >
+                    Загрузка типов изделий...
+                  </li>
                 ) : garmentTypes.length === 0 ? (
-                  <li className="dropdown-item" style={{ fontStyle: "italic", opacity: 0.7 }}>Нет доступных типов. Добавьте в БД.</li>
+                  <li
+                    className="dropdown-item"
+                    style={{ fontStyle: "italic", opacity: 0.7 }}
+                  >
+                    Нет доступных типов. Добавьте в БД.
+                  </li>
                 ) : (
                   <>
                     {garmentTypes.map((option, idx) => (
                       <li
                         key={option.value}
                         role="option"
-                        aria-selected={selectedOption?.value === option.value ? "true" : "false"}
+                        aria-selected={
+                          selectedOption?.value === option.value
+                            ? "true"
+                            : "false"
+                        }
                         tabIndex={-1}
                         className={`dropdown-item ${idx === highlightedIndex ? "highlighted" : ""}`}
                         onClick={() => onOptionSelect(option)}
@@ -313,12 +412,28 @@ export default function CreateProject() {
                         onMouseLeave={() => setHighlightedIndex(-1)}
                       >
                         <span>{option.title}</span>
-                        <span className="dropdown-item-description">{option.description}</span>
+                        <span className="dropdown-item-description">
+                          {option.description}
+                        </span>
                       </li>
                     ))}
-                    <li key="custom" role="option" className="dropdown-item" onClick={() => onOptionSelect({ value: "custom", title: "Другое изделие", description: "Создать вручную", db_id: null })}>
+                    <li
+                      key="custom"
+                      role="option"
+                      className="dropdown-item"
+                      onClick={() =>
+                        onOptionSelect({
+                          value: "custom",
+                          title: "Другое изделие",
+                          description: "Создать вручную",
+                          db_id: null,
+                        })
+                      }
+                    >
                       <span>🛠️ Другое изделие</span>
-                      <span className="dropdown-item-description">Изделие, выкройка которого спроектирована вручную</span>
+                      <span className="dropdown-item-description">
+                        Изделие, выкройка которого спроектирована вручную
+                      </span>
                     </li>
                   </>
                 )}
@@ -326,7 +441,11 @@ export default function CreateProject() {
             )}
           </div>
 
-          <div className="checkbox-wrapper" aria-live="polite" style={{ marginTop: "-1.5rem", fontWeight: 600, fontSize: "1rem" }}>
+          <div
+            className="checkbox-wrapper"
+            aria-live="polite"
+            style={{ marginTop: "-1.5rem", fontWeight: 600, fontSize: "1rem" }}
+          >
             {setSelectedContent(selectedOption)}
           </div>
         </section>
@@ -343,7 +462,10 @@ export default function CreateProject() {
               onClick={handleSelectDirectory}
               type="button"
             >
-              📁 {selectedDirForNewFolder ? "Изменить директорию" : "Выбрать директорию"}
+              📁{" "}
+              {selectedDirForNewFolder
+                ? "Изменить директорию"
+                : "Выбрать директорию"}
             </button>
 
             {selectedDirForNewFolder && (
@@ -357,7 +479,12 @@ export default function CreateProject() {
 
           {/* Кнопка создания папки */}
           {selectedDirForNewFolder && !showAddDirInput && (
-            <button onClick={() => setShowAddDirInput(true)} className="add-dir-button" type="button" title="Создать новую папку">
+            <button
+              onClick={() => setShowAddDirInput(true)}
+              className="add-dir-button"
+              type="button"
+              title="Создать новую папку"
+            >
               + Новая папка
             </button>
           )}
@@ -371,36 +498,72 @@ export default function CreateProject() {
                 onChange={(e) => setNewDirName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") createNewDir();
-                  if (e.key === "Escape") { setShowAddDirInput(false); setNewDirName(""); }
+                  if (e.key === "Escape") {
+                    setShowAddDirInput(false);
+                    setNewDirName("");
+                  }
                 }}
                 placeholder="Имя папки"
                 className="new-dir-name-input"
                 autoFocus
               />
               <div className="add-dir-buttons">
-                <button onClick={createNewDir} className="btn-confirm-dir" type="button" title="Создать папку">✓</button>
-                <button onClick={() => { setShowAddDirInput(false); setNewDirName(""); }} className="btn-cancel-dir" type="button" title="Отмена">✕</button>
+                <button
+                  onClick={createNewDir}
+                  className="btn-confirm-dir"
+                  type="button"
+                  title="Создать папку"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddDirInput(false);
+                    setNewDirName("");
+                  }}
+                  className="btn-cancel-dir"
+                  type="button"
+                  title="Отмена"
+                >
+                  ✕
+                </button>
               </div>
             </div>
           )}
 
           {/* 3D превью свитера (компактное, после директории) */}
           {isInitialized && (
-            <div role="region" aria-label="3D preview" className="preview-3d preview-3d-compact">
-              <Sweater3DPreview height={140} />
+            <div className="preview-3d preview-3d-compact">
+              <Sweater3DPreview
+                height={400}
+                // 🔹 Используем рассчитанные nodes или fallback
+                nodes={calculatedData?.nodes || blueprintNodeArray}
+                // 🔹 Передаём новые данные для позиционирования
+                stitchData={calculatedData?.blueprint_stitch_data}
+                rowData={calculatedData?.blueprint_row_data}
+                autoRotate={true}
+              />
             </div>
           )}
 
           <FancyButton
             onClick={async () => {
-              if (!selectedOption) { addToast("Пожалуйста, выберите тип изделия", "warning"); return; }
-              if (!selectedDirForNewFolder) { addToast("Пожалуйста, выберите директорию", "warning"); return; }
+              if (!selectedOption) {
+                addToast("Пожалуйста, выберите тип изделия", "warning");
+                return;
+              }
+              if (!selectedDirForNewFolder) {
+                addToast("Пожалуйста, выберите директорию", "warning");
+                return;
+              }
               if (!projectName.trim()) {
                 const input = document.getElementById("project-name-input");
                 if (input) {
                   input.style.borderColor = "#ef4444";
                   input.focus();
-                  setTimeout(() => { input.style.borderColor = ""; }, 2000);
+                  setTimeout(() => {
+                    input.style.borderColor = "";
+                  }, 2000);
                 }
                 addToast("Пожалуйста, введите название проекта", "warning");
                 return;
@@ -415,8 +578,13 @@ export default function CreateProject() {
                     file_path: selectedDirForNewFolder,
                   },
                 });
-                addToast(`Проект создан!\n📁 Файл: ${response.file_path}\n🆔 ID: ${response.project_id}`, "success");
-                await invoke("open_project_editor", { projectId: response.project_id });
+                addToast(
+                  `Проект создан!\n📁 Файл: ${response.file_path}\n🆔 ID: ${response.project_id}`,
+                  "success",
+                );
+                await invoke("open_project_editor", {
+                  projectId: response.project_id,
+                });
               } catch (error) {
                 console.error("Failed to create project:", error);
                 addToast(`Ошибка создания проекта:\n${error}`, "error");

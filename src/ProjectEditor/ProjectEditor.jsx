@@ -85,6 +85,12 @@ export default function ProjectEditor() {
     await getCurrentWindow().close();
   }, []);
 
+  // Обработка кнопки "Назад" — навигируем на страницу создания проекта
+  const handleBack = useCallback(async () => {
+    // Пробуем навигировать на create_project в том же окне
+    window.location.hash = "#/create_project";
+  }, []);
+
   // Горячие клавиши
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -125,7 +131,7 @@ export default function ProjectEditor() {
       {/* Header */}
       <header className="editor-header">
         <div className="header-left">
-          <button className="btn-back" onClick={() => navigate("/")}>
+          <button className="btn-back" onClick={handleBack} title="Назад">
             ←
           </button>
           <h1>{project.name}</h1>

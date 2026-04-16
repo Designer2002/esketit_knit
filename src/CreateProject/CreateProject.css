@@ -204,7 +204,7 @@ html,
 .preview-3d-compact {
   height: auto;
   min-height: 140px;
-  max-height: 160px;
+  max-height: 800px;
   margin-top: 0.5rem;
 }
 
