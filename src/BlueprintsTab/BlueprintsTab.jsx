@@ -5,14 +5,14 @@ import "./BlueprintsTab.css";
 
 // ===== DEFAULT SIZE M MEASUREMENTS — только 9 необходимых + плотность =====
 const DEFAULT_MEASUREMENTS = {
-  og: 94,       // обхват груди
-  dr: 60,       // длина рукава
-  oz: 16,       // обхват запястья
-  or: 32,       // обхват руки
-  di: 62,       // длина изделия
-  glg: 8,       // глубина горловины
-  oh: 58,       // обхват головы (= шея в формулах)
-  ease: 6,      // прибавка на свободу
+  og: 94, // обхват груди
+  dr: 60, // длина рукава
+  oz: 16, // обхват запястья
+  or: 32, // обхват руки
+  di: 62, // длина изделия
+  glg: 8, // глубина горловины
+  oh: 58, // обхват головы (= шея в формулах)
+  ease: 6, // прибавка на свободу
   gauge_stitches_per_cm: 2.5,
   gauge_rows_per_cm: 3.5,
 };
@@ -121,26 +121,35 @@ function MeasurementModal({ isOpen, onClose, onSave, initialMeasurements }) {
 
           {/* Basic measurements - always shown */}
           <div className="measurements-grid">
-            {["og", "or", "oz", "dr", "di", "glg", "oh", "ease", "gauge_stitches_per_cm", "gauge_rows_per_cm"].map(
-              (key) => {
-                const { label, unit, hint } = MEASUREMENT_LABELS[key];
-                return (
-                  <div key={key} className="measurement-field" title={hint}>
-                    <label>
-                      {label}
-                      {unit && ` (${unit})`}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={measurements[key] ?? ""}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                    />
-                  </div>
-                );
-              }
-            )}
+            {[
+              "og",
+              "or",
+              "oz",
+              "dr",
+              "di",
+              "glg",
+              "oh",
+              "ease",
+              "gauge_stitches_per_cm",
+              "gauge_rows_per_cm",
+            ].map((key) => {
+              const { label, unit, hint } = MEASUREMENT_LABELS[key];
+              return (
+                <div key={key} className="measurement-field" title={hint}>
+                  <label>
+                    {label}
+                    {unit && ` (${unit})`}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={measurements[key] ?? ""}
+                    onChange={(e) => handleChange(key, e.target.value)}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Set-in sleeve additional measurements */}
@@ -148,30 +157,40 @@ function MeasurementModal({ isOpen, onClose, onSave, initialMeasurements }) {
             <h4>🪡 Дополнительные мерки (для втачного рукава)</h4>
           </div>
           <div className="measurements-grid">
-            {["shoulder_height", "shoulder_length"].map(
-              (key) => {
-                const labels = {
-                  shoulder_height: { label: "Высота плеча", unit: "см", hint: "Обычно 5-6 см" },
-                  shoulder_length: { label: "Длина плеча", unit: "см", hint: "От шеи до конца плеча" },
-                };
-                const { label, unit, hint } = labels[key] || { label: key, unit: "см", hint: "" };
-                return (
-                  <div key={key} className="measurement-field" title={hint}>
-                    <label>
-                      {label}
-                      {unit && ` (${unit})`}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={measurements[key] ?? ""}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                    />
-                  </div>
-                );
-              }
-            )}
+            {["shoulder_height", "shoulder_length"].map((key) => {
+              const labels = {
+                shoulder_height: {
+                  label: "Высота плеча",
+                  unit: "см",
+                  hint: "Обычно 5-6 см",
+                },
+                shoulder_length: {
+                  label: "Длина плеча",
+                  unit: "см",
+                  hint: "От шеи до конца плеча",
+                },
+              };
+              const { label, unit, hint } = labels[key] || {
+                label: key,
+                unit: "см",
+                hint: "",
+              };
+              return (
+                <div key={key} className="measurement-field" title={hint}>
+                  <label>
+                    {label}
+                    {unit && ` (${unit})`}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={measurements[key] ?? ""}
+                    onChange={(e) => handleChange(key, e.target.value)}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Талия/Бёдра */}
@@ -179,32 +198,55 @@ function MeasurementModal({ isOpen, onClose, onSave, initialMeasurements }) {
             <h4>👗 Талия и бёдра (приталенный силуэт)</h4>
           </div>
           <div className="measurements-grid">
-            {["waist_circumference", "hip_circumference", "back_len", "hip_len"].map(
-              (key) => {
-                const labels = {
-                  waist_circumference: { label: "Обхват талии", unit: "см", hint: "По самому узкому месту" },
-                  hip_circumference: { label: "Обхват бёдер", unit: "см", hint: "По самым выступающим точкам" },
-                  back_len: { label: "Длина до талии по спинке", unit: "см", hint: "От 7-го шейного позвонка до талии" },
-                  hip_len: { label: "Длина до линии бёдер", unit: "см", hint: "От талии до линии бёдер (обычно 18-22 см)" },
-                };
-                const { label, unit, hint } = labels[key] || { label: key, unit: "см", hint: "" };
-                return (
-                  <div key={key} className="measurement-field" title={hint}>
-                    <label>
-                      {label}
-                      {unit && ` (${unit})`}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={measurements[key] ?? ""}
-                      onChange={(e) => handleChange(key, e.target.value)}
-                    />
-                  </div>
-                );
-              }
-            )}
+            {[
+              "waist_circumference",
+              "hip_circumference",
+              "back_len",
+              "hip_len",
+            ].map((key) => {
+              const labels = {
+                waist_circumference: {
+                  label: "Обхват талии",
+                  unit: "см",
+                  hint: "По самому узкому месту",
+                },
+                hip_circumference: {
+                  label: "Обхват бёдер",
+                  unit: "см",
+                  hint: "По самым выступающим точкам",
+                },
+                back_len: {
+                  label: "Длина до талии по спинке",
+                  unit: "см",
+                  hint: "От 7-го шейного позвонка до талии",
+                },
+                hip_len: {
+                  label: "Длина до линии бёдер",
+                  unit: "см",
+                  hint: "От талии до линии бёдер (обычно 18-22 см)",
+                },
+              };
+              const { label, unit, hint } = labels[key] || {
+                label: key,
+                unit: "см",
+                hint: "",
+              };
+              return (
+                <div key={key} className="measurement-field" title={hint}>
+                  <label>
+                    {label}
+                    {unit && ` (${unit})`}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    value={measurements[key] ?? ""}
+                    onChange={(e) => handleChange(key, e.target.value)}
+                  />
+                </div>
+              );
+            })}
           </div>
 
           {/* Yarn color picker */}
@@ -320,7 +362,7 @@ function BlueprintSVG({
     onSelectStamp(stampId);
     const svg = svgRef.current;
     if (!svg) return;
-    const stamp = stamps.find(s => s.id === stampId);
+    const stamp = stamps.find((s) => s.id === stampId);
     if (!stamp) return;
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
@@ -329,7 +371,10 @@ function BlueprintSVG({
     if (!ctm) return;
     const svgP = pt.matrixTransform(ctm.inverse());
     setDraggingStamp(stampId);
-    setStampDragOffset({ x: svgP.x - stamp.position_x, y: svgP.y - stamp.position_y });
+    setStampDragOffset({
+      x: svgP.x - stamp.position_x,
+      y: svgP.y - stamp.position_y,
+    });
   };
 
   useEffect(() => {
@@ -344,7 +389,11 @@ function BlueprintSVG({
       const ctm = svg.getScreenCTM();
       if (!ctm) return;
       const svgP = pt.matrixTransform(ctm.inverse());
-      onMoveStamp(draggingStamp, svgP.x - stampDragOffset.x, svgP.y - stampDragOffset.y);
+      onMoveStamp(
+        draggingStamp,
+        svgP.x - stampDragOffset.x,
+        svgP.y - stampDragOffset.y,
+      );
     };
 
     const handleUp = () => {
@@ -360,12 +409,9 @@ function BlueprintSVG({
   }, [draggingStamp, stampDragOffset, onMoveStamp]);
 
   // handleMouseMove — disabled while dragging is off
-  const handleMouseMove = useCallback(
-    (e) => {
-      // node dragging disabled
-    },
-    [],
-  );
+  const handleMouseMove = useCallback((e) => {
+    // node dragging disabled
+  }, []);
 
   const handleMouseUp = useCallback(() => {
     // node dragging disabled
@@ -384,7 +430,7 @@ function BlueprintSVG({
 
   const padding = 10;
   const partNodes = nodes.filter((n) => n.part_code === partCode);
-  
+
   // Фильтруем только КЛЮЧЕВЫЕ узлы (не промежуточные pts)
   // Промежуточные узлы имеют числовой суффикс: armhole_0, shoulder_1, neck_2 и т.д.
   const isKeyNode = (nodeName) => {
@@ -392,18 +438,25 @@ function BlueprintSVG({
     if (/_\d+$/.test(nodeName)) {
       return false;
     }
-    
+
     // Ключевые узлы
     const keyPatterns = [
-      "_hem", "_underarm", "_raglan", "_neck_center",
-      "_cuff_", "_top_", "neck_left", "neck_right",
-      "neck_left_", "neck_right_"
+      "_hem",
+      "_underarm",
+      "_raglan",
+      "_neck_center",
+      "_cuff_",
+      "_top_",
+      "neck_left",
+      "neck_right",
+      "neck_left_",
+      "neck_right_",
     ];
-    
-    return keyPatterns.some(p => nodeName.includes(p));
+
+    return keyPatterns.some((p) => nodeName.includes(p));
   };
-  
-  const keyNodes = partNodes.filter(n => isKeyNode(n.node_name));
+
+  const keyNodes = partNodes.filter((n) => isKeyNode(n.node_name));
 
   const getNodePos = (nodeName) => {
     const n = partNodes.find((nd) => nd.node_name === nodeName);
@@ -423,7 +476,7 @@ function BlueprintSVG({
     const getSectionPoints = (prefix, section) => {
       // section: 'armhole', 'shoulder', 'neck'
       return partNodes
-        .filter(n => n.node_name.includes(`${prefix}_${section}_`))
+        .filter((n) => n.node_name.includes(`${prefix}_${section}_`))
         .sort((a, b) => a.y - b.y); // sort top to bottom
     };
 
@@ -443,20 +496,41 @@ function BlueprintSVG({
         const neckC = getNodePos("back_neck_center");
 
         let path = `M ${hemL.x} ${hemL.y}`;
-        
+
         // Left side up: armhole → shoulder → neck
-        armholeL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        shoulderL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        armholeL.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
+        shoulderL.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
+        neckL.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
+
         // Neck center
         if (neckC) path += ` L ${neckC.x} ${neckC.y}`;
-        
+
         // Right side down: neck → shoulder → armhole → hem
-        neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        shoulderR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        armholeR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        neckR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+        shoulderR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+        armholeR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+
         path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
         return path;
       }
@@ -464,13 +538,29 @@ function BlueprintSVG({
       // Raglan back: NO neckline - straight line shoulder to shoulder
       const hemL = getNodePos("back_left_hem");
       const hemR = getNodePos("back_right_hem");
-       const cutL = getNodePos("back_left_cut") || { x: 0, y: getField("armhole_height_rows") };
-      const cutR = getNodePos("back_right_cut") || { x: getField("back_width_stitches", "hem_width_stitches", 100), y: getField("armhole_height_rows") };
+      const cutL = getNodePos("back_left_cut") || {
+        x: 0,
+        y: getField("armhole_height_rows"),
+      };
+      const cutR = getNodePos("back_right_cut") || {
+        x: getField("back_width_stitches", "hem_width_stitches", 100),
+        y: getField("armhole_height_rows"),
+      };
 
-      const underarmY = getField("raglan_start_row_back", "armhole_height_rows", 50);
-      const underarmL = getNodePos("back_left_underarm") || { x: (hemW - (hemW - uaW)) / 2, y: underarmY };
-      const underarmR = getNodePos("back_right_underarm") || { x: (hemW + (hemW - uaW)) / 2, y: underarmY };
-      
+      const underarmY = getField(
+        "raglan_start_row_back",
+        "armhole_height_rows",
+        50,
+      );
+      const underarmL = getNodePos("back_left_underarm") || {
+        x: (hemW - (hemW - uaW)) / 2,
+        y: underarmY,
+      };
+      const underarmR = getNodePos("back_right_underarm") || {
+        x: (hemW + (hemW - uaW)) / 2,
+        y: underarmY,
+      };
+
       const shoulderL = getNodePos("back_left_shoulder") || underarmL;
       const shoulderR = getNodePos("back_right_shoulder") || underarmR;
 
@@ -507,39 +597,86 @@ function BlueprintSVG({
         let path = `M ${hemL.x} ${hemL.y}`;
 
         // Left side up: armhole → shoulder → neck
-        armholeL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        shoulderL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        armholeL.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
+        shoulderL.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
+
         // Neckline - V vs U
         if (necklineType === "V" && neckC) {
           // V-neck: straight diagonal to bottom point
           path += ` L ${neckC.x} ${neckC.y}`;
         } else {
           // U-neck: rounded through all points
-          neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+          neckL.forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
           if (neckC) path += ` L ${neckC.x} ${neckC.y}`;
         }
         // Right side down: neck → shoulder → armhole → hem
-        neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        shoulderR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        armholeR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        neckR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+        shoulderR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+        armholeR
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+
         path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
         return path;
       }
 
       // Raglan front: use detailed neck points if available
-      const hemL = getNodePos("front_left_hem") || { x: 0, y: getField("total_rows", "total_garment_rows", 100) };
-      const hemR = getNodePos("front_right_hem") || { x: getField("front_width_stitches", "hem_width_stitches", 100), y: getField("total_rows", "total_garment_rows", 100) };
-       const cutL = getNodePos("front_left_cut") || { x: 0, y: getField("armhole_height_rows") };
-      const cutR = getNodePos("front_right_cut") || { x: getField("front_width_stitches", "hem_width_stitches", 100), y: getField("armhole_height_rows") };
+      const hemL = getNodePos("front_left_hem") || {
+        x: 0,
+        y: getField("total_rows", "total_garment_rows", 100),
+      };
+      const hemR = getNodePos("front_right_hem") || {
+        x: getField("front_width_stitches", "hem_width_stitches", 100),
+        y: getField("total_rows", "total_garment_rows", 100),
+      };
+      const cutL = getNodePos("front_left_cut") || {
+        x: 0,
+        y: getField("armhole_height_rows"),
+      };
+      const cutR = getNodePos("front_right_cut") || {
+        x: getField("front_width_stitches", "hem_width_stitches", 100),
+        y: getField("armhole_height_rows"),
+      };
 
-      const underarmY = getField("raglan_start_row_front", "armhole_height_rows", 50);
+      const underarmY = getField(
+        "raglan_start_row_front",
+        "armhole_height_rows",
+        50,
+      );
       const hemW = getField("front_width_stitches", "hem_width_stitches", 100);
-      const uaW = getField("underarm_width_stitches", "underarm_width_stitches", hemW - 20);
-      const underarmL = getNodePos("front_left_underarm") || { x: (hemW - (hemW - uaW)) / 2, y: underarmY };
-      const underarmR = getNodePos("front_right_underarm") || { x: (hemW + (hemW - uaW)) / 2, y: underarmY };
-      
+      const uaW = getField(
+        "underarm_width_stitches",
+        "underarm_width_stitches",
+        hemW - 20,
+      );
+      const underarmL = getNodePos("front_left_underarm") || {
+        x: (hemW - (hemW - uaW)) / 2,
+        y: underarmY,
+      };
+      const underarmR = getNodePos("front_right_underarm") || {
+        x: (hemW + (hemW - uaW)) / 2,
+        y: underarmY,
+      };
+
       // Shoulder and neck - try detailed points first
       const shoulderL = getSectionPoints("front_left", "shoulder");
       const shoulderR = getSectionPoints("front_right", "shoulder");
@@ -547,37 +684,55 @@ function BlueprintSVG({
       const neckR = getSectionPoints("front_right", "neck");
       const neckC = getNodePos("front_neck_center");
       const neckY = shoulderR[0];
-      
+
       const hasDetailedNeck = neckL.length > 0 && neckR.length > 0;
 
       if (hasDetailedNeck) {
-        const shoulderLDefault = shoulderL.length > 0 ? shoulderL : [getNodePos("front_left_shoulder") || underarmL];
-        const shoulderRDefault = shoulderR.length > 0 ? shoulderR : [getNodePos("front_right_shoulder") || underarmR];
+        const shoulderLDefault =
+          shoulderL.length > 0
+            ? shoulderL
+            : [getNodePos("front_left_shoulder") || underarmL];
+        const shoulderRDefault =
+          shoulderR.length > 0
+            ? shoulderR
+            : [getNodePos("front_right_shoulder") || underarmR];
 
         let path = `M ${hemL.x} ${hemL.y}`;
         path += ` L ${cutL.x} ${cutL.y}`;
         path += ` L ${underarmL.x} ${underarmL.y}`;
-        shoulderLDefault.forEach(p => { path += ` L ${p.x} ${p.y}`; });
+        shoulderLDefault.forEach((p) => {
+          path += ` L ${p.x} ${p.y}`;
+        });
         path += ` L ${neckL[0].x} ${neckY.y}`;
         // Neckline - different for V vs U
         if (necklineType === "V" && neckC) {
           // V-neck: straight diagonal lines, skip intermediate decrease points
           // Go from shoulder start straight to bottom of V, then back up
-       
+
           path += ` L ${neckL[0].x} ${neckL[0].y}`;
           path += ` L ${neckC.x} ${neckC.y}`;
           path += ` L ${neckR[0].x} ${neckR[0].y}`;
-          
         } else {
           // U-neck: use all neck decrease points for rounded shape
-          
-          neckL.forEach(p => { path += ` L ${p.x} ${p.y}`; });
-         neckR.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-   
+
+          neckL.forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+          neckR
+            .slice()
+            .reverse()
+            .forEach((p) => {
+              path += ` L ${p.x} ${p.y}`;
+            });
         }
         path += ` L ${neckR[0].x} ${neckY.y}`;
-        shoulderRDefault.slice().reverse().forEach(p => { path += ` L ${p.x} ${p.y}`; });
-        
+        shoulderRDefault
+          .slice()
+          .reverse()
+          .forEach((p) => {
+            path += ` L ${p.x} ${p.y}`;
+          });
+
         path += ` L ${underarmR.x} ${underarmR.y}`;
         path += ` L ${cutR.x} ${cutR.y}`;
         path += ` L ${hemR.x} ${hemR.y} L ${hemL.x} ${hemL.y} Z`;
@@ -586,10 +741,19 @@ function BlueprintSVG({
 
       // Fallback: simple corner points with V/U neck
       const neckW = getField("neck_width_stitches", "neck_width_stitches", 20);
-      const neckLSimple = getNodePos("front_neck_left") || { x: (hemW - neckW) / 2, y: 0 };
-      const neckRSimple = getNodePos("front_neck_right") || { x: (hemW + neckW) / 2, y: 0 };
+      const neckLSimple = getNodePos("front_neck_left") || {
+        x: (hemW - neckW) / 2,
+        y: 0,
+      };
+      const neckRSimple = getNodePos("front_neck_right") || {
+        x: (hemW + neckW) / 2,
+        y: 0,
+      };
       const neckDepth = getField("neck_depth_rows", "neck_depth_rows", 10);
-      const neckCSimple = getNodePos("front_neck_center") || { x: hemW / 2, y: neckDepth };
+      const neckCSimple = getNodePos("front_neck_center") || {
+        x: hemW / 2,
+        y: neckDepth,
+      };
       const shoulderLSimple = getNodePos("front_left_shoulder") || underarmL;
       const shoulderRSimple = getNodePos("front_right_shoulder") || underarmR;
 
@@ -613,7 +777,7 @@ function BlueprintSVG({
     // ===== РУКАВА =====
     if (partCode === "sleeve_left" || partCode === "sleeve_right") {
       const isLeft = partCode === "sleeve_left";
-console.log(nodes);
+      console.log(nodes);
       const cuffL = getNodePos("sleeve_cuff_left") || { x: 0, y: 0 };
       const cuffR = getNodePos("sleeve_cuff_right") || { x: 0, y: 0 };
       const cutL = getNodePos("sleeve_cut_left") || { x: 0, y: 0 };
@@ -626,7 +790,7 @@ console.log(nodes);
       // Подрез — для raglan, для set_in = 0
       const dx = getField("decrease_shoulder_cuts", null, 0) || 0;
 
-      console.log(cutL, cutR)
+      console.log(cutL, cutR);
 
       if (isLeft) {
         return `
@@ -659,7 +823,7 @@ console.log(nodes);
           Z`;
       }
     }
-  }
+  };
 
   // Node dragging temporarily disabled (buggy)
   const handleMouseDown = (e, nodeName) => {
@@ -671,20 +835,23 @@ console.log(nodes);
 
   const extraLeft = Math.floor(vbW * 0.3);
   const constraintHint = NODE_CONSTRAINT_HINTS[`${partCode}::${selectedNode}`];
-  
+
   // Центрируем viewport на активную деталь (масштаб 1.3)
   const scale = 1.5;
   const vw = vbW / scale;
   const vh = vbH / scale + 100;
-    let cx = vbW / 2;
+  let cx = vbW / 2;
   if (partCode === "back") cx = vbW * 0.75;
   else if (partCode === "front") cx = vbW * 0.25;
   // РУКАВА в Rust считаются по центру (vbW / 2), поэтому и камеру ставим в центр
-  else if (partCode === "sleeve_left" || partCode === "sleeve_right") cx = vbW / 2; 
+  else if (partCode === "sleeve_left" || partCode === "sleeve_right")
+    cx = vbW / 2;
   const viewBoxStr = `${cx - vw / 2} ${-vh * 0.15} ${vw} ${vh * 1.2}`;
 
   // Маркеры подрезов (красные точки на подмышках)
-  const underarmNodes = partNodes.filter(n => n.node_name.includes("underarm"));
+  const underarmNodes = partNodes.filter((n) =>
+    n.node_name.includes("underarm"),
+  );
 
   return (
     <div className="blueprint-svg-container">
@@ -770,12 +937,14 @@ console.log(nodes);
 
         {/* Center line of the pattern shape (not canvas center!) */}
         {(() => {
-          const shapeNodes = partNodes.filter(n => !n.node_name.includes("_raglan_slope_"));
+          const shapeNodes = partNodes.filter(
+            (n) => !n.node_name.includes("_raglan_slope_"),
+          );
           if (shapeNodes.length === 0) return null;
-          const minX = Math.min(...shapeNodes.map(n => n.x));
-          const maxX = Math.max(...shapeNodes.map(n => n.x));
-          const minY = Math.min(...shapeNodes.map(n => n.y));
-          const maxY = Math.max(...shapeNodes.map(n => n.y));
+          const minX = Math.min(...shapeNodes.map((n) => n.x));
+          const maxX = Math.max(...shapeNodes.map((n) => n.x));
+          const minY = Math.min(...shapeNodes.map((n) => n.y));
+          const maxY = Math.max(...shapeNodes.map((n) => n.y));
           const centerX = (minX + maxX) / 2;
           return (
             <line
@@ -798,10 +967,10 @@ console.log(nodes);
             if (!patData) {
               return null;
             }
-            const rows = patData.split("\n").filter(r => r.trim());
+            const rows = patData.split("\n").filter((r) => r.trim());
             const pw = stamp.width || rows[0]?.length || 10;
             const ph = stamp.height || rows.length;
-            const allPartNodes = nodes.filter(n => n.part_code === partCode);
+            const allPartNodes = nodes.filter((n) => n.part_code === partCode);
             if (allPartNodes.length === 0) return null;
 
             const posX = stamp.position_x;
@@ -810,22 +979,22 @@ console.log(nodes);
             const cellW = 1;
             const cellH = 1;
             // Use yarn color or stamp custom color
-            const fillColor = stamp.custom_color || (yarnColor ? yarnColor : "#2196F3");
+            const fillColor =
+              stamp.custom_color || (yarnColor ? yarnColor : "#2196F3");
             const isColorPickerOpen = stampColorPicker === stamp.id;
             const isSelected = selectedStamp === stamp.id;
 
             // Check if stamp goes outside pattern bounds
-            const minX = Math.min(...allPartNodes.map(n => n.x));
-            const maxX = Math.max(...allPartNodes.map(n => n.x));
-            const minY = Math.min(...allPartNodes.map(n => n.y));
-            const maxY = Math.max(...allPartNodes.map(n => n.y));
+            const minX = Math.min(...allPartNodes.map((n) => n.x));
+            const maxX = Math.max(...allPartNodes.map((n) => n.x));
+            const minY = Math.min(...allPartNodes.map((n) => n.y));
+            const maxY = Math.max(...allPartNodes.map((n) => n.y));
 
-            const outOfBounds = (
+            const outOfBounds =
               posX < minX ||
               posX + pw > maxX ||
               posY < minY ||
-              posY + ph > maxY
-            );
+              posY + ph > maxY;
 
             console.log("[Blueprints] Stamp:", {
               id: stamp.id,
@@ -841,7 +1010,9 @@ console.log(nodes);
               <g
                 key={`stamp-${stamp.id}`}
                 transform={`translate(${posX}, ${posY})`}
-                style={{ cursor: draggingStamp === stamp.id ? "grabbing" : "grab" }}
+                style={{
+                  cursor: draggingStamp === stamp.id ? "grabbing" : "grab",
+                }}
                 onMouseDown={(e) => handleStampMouseDown(e, stamp.id)}
                 onKeyDown={(e) => {
                   if (e.shiftKey && e.key === "C") {
@@ -864,19 +1035,21 @@ console.log(nodes);
                 />
                 {/* Pattern cells */}
                 {rows.map((row, ri) =>
-                  row.split("").map((cell, ci) =>
-                    cell === "1" ? (
-                      <rect
-                        key={`cell-${ri}-${ci}`}
-                        x={ci * cellW}
-                        y={ri * cellH}
-                        width={cellW}
-                        height={cellH}
-                        fill={fillColor}
-                        opacity={isSelected ? 0.9 : 0.6}
-                      />
-                    ) : null
-                  )
+                  row
+                    .split("")
+                    .map((cell, ci) =>
+                      cell === "1" ? (
+                        <rect
+                          key={`cell-${ri}-${ci}`}
+                          x={ci * cellW}
+                          y={ri * cellH}
+                          width={cellW}
+                          height={cellH}
+                          fill={fillColor}
+                          opacity={isSelected ? 0.9 : 0.6}
+                        />
+                      ) : null,
+                    ),
                 )}
                 {/* Horizontal row marker lines at top and bottom of stamp */}
                 <line
@@ -931,18 +1104,21 @@ console.log(nodes);
         {stamps.map((stamp) => {
           const patData = stamp.pattern_data || "";
           if (!patData) return null;
-          const rows = patData.split("\n").filter(r => r.trim());
+          const rows = patData.split("\n").filter((r) => r.trim());
           const pw = stamp.width || rows[0]?.length || 10;
           const ph = rows.length;
-          const allPartNodes = nodes.filter(n => n.part_code === partCode);
+          const allPartNodes = nodes.filter((n) => n.part_code === partCode);
           if (allPartNodes.length === 0) return null;
 
           const posX = stamp.position_x;
           const posY = stamp.position_y;
-          const minY = Math.min(...allPartNodes.map(n => n.y));
-          const maxY = Math.max(...allPartNodes.map(n => n.y));
+          const minY = Math.min(...allPartNodes.map((n) => n.y));
+          const maxY = Math.max(...allPartNodes.map((n) => n.y));
           const topRowNum = Math.round(maxY - Math.min(posY, maxY));
-          const bottomRowNum = Math.max(0, Math.round(maxY - Math.min(posY + ph, maxY)));
+          const bottomRowNum = Math.max(
+            0,
+            Math.round(maxY - Math.min(posY + ph, maxY)),
+          );
 
           return (
             <g key={`rowlabel-${stamp.id}`}>
@@ -983,12 +1159,13 @@ console.log(nodes);
           if (selectedStamp !== stamp.id) return null;
           const patData = stamp.pattern_data || "";
           if (!patData) return null;
-          const rows = patData.split("\n").filter(r => r.trim());
+          const rows = patData.split("\n").filter((r) => r.trim());
           const pw = stamp.width || rows[0]?.length || 10;
           const posX = stamp.position_x;
           const posY = stamp.position_y;
           const isColorPickerOpen = stampColorPicker === stamp.id;
-          const fillColor = stamp.custom_color || (yarnColor ? yarnColor : "#2196F3");
+          const fillColor =
+            stamp.custom_color || (yarnColor ? yarnColor : "#2196F3");
 
           return (
             <g key={`actions-${stamp.id}`}>
@@ -996,41 +1173,127 @@ console.log(nodes);
               <g
                 transform={`translate(${posX + pw + 3}, ${posY - 8})`}
                 style={{ cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); onDeleteStamp(stamp.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteStamp(stamp.id);
+                }}
               >
-                <circle cx="0" cy="0" r="4" fill="#ff4444" stroke="#fff" strokeWidth="0.8"/>
-                <text x="0" y="1.5" textAnchor="middle" fill="#fff" fontSize="5" fontWeight="bold">✕</text>
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4"
+                  fill="#ff4444"
+                  stroke="#fff"
+                  strokeWidth="0.8"
+                />
+                <text
+                  x="0"
+                  y="1.5"
+                  textAnchor="middle"
+                  fill="#fff"
+                  fontSize="5"
+                  fontWeight="bold"
+                >
+                  ✕
+                </text>
               </g>
               {/* Clone */}
               <g
                 transform={`translate(${posX + pw + 13}, ${posY - 8})`}
                 style={{ cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); onCloneStamp(stamp.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCloneStamp(stamp.id);
+                }}
               >
-                <circle cx="0" cy="0" r="4" fill="#4CAF50" stroke="#fff" strokeWidth="0.8"/>
-                <text x="0" y="1.5" textAnchor="middle" fill="#fff" fontSize="5" fontWeight="bold">+</text>
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4"
+                  fill="#4CAF50"
+                  stroke="#fff"
+                  strokeWidth="0.8"
+                />
+                <text
+                  x="0"
+                  y="1.5"
+                  textAnchor="middle"
+                  fill="#fff"
+                  fontSize="5"
+                  fontWeight="bold"
+                >
+                  +
+                </text>
               </g>
               {/* Color picker toggle */}
               <g
                 transform={`translate(${posX + pw + 23}, ${posY - 8})`}
                 style={{ cursor: "pointer" }}
-                onClick={(e) => { e.stopPropagation(); setStampColorPicker(isColorPickerOpen ? null : stamp.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStampColorPicker(isColorPickerOpen ? null : stamp.id);
+                }}
               >
-                <circle cx="0" cy="0" r="4" fill="#9C27B0" stroke="#fff" strokeWidth="0.8"/>
-                <text x="0" y="1.5" textAnchor="middle" fill="#fff" fontSize="5" fontWeight="bold">🎨</text>
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="4"
+                  fill="#9C27B0"
+                  stroke="#fff"
+                  strokeWidth="0.8"
+                />
+                <text
+                  x="0"
+                  y="1.5"
+                  textAnchor="middle"
+                  fill="#fff"
+                  fontSize="5"
+                  fontWeight="bold"
+                >
+                  🎨
+                </text>
               </g>
               {/* Color picker */}
               {isColorPickerOpen && (
-                <g transform={`translate(${posX + pw / 2}, ${posY + rows.length + 12})`}>
-                  <rect x="-30" y="-8" width="60" height="28" rx="3" fill="rgba(0,0,0,0.85)" stroke="#fff" strokeWidth="0.5"/>
-                  <text x="0" y="2" textAnchor="middle" fill="#aaa" fontSize="4">Shift+C закрыть</text>
+                <g
+                  transform={`translate(${posX + pw / 2}, ${posY + rows.length + 12})`}
+                >
+                  <rect
+                    x="-30"
+                    y="-8"
+                    width="60"
+                    height="28"
+                    rx="3"
+                    fill="rgba(0,0,0,0.85)"
+                    stroke="#fff"
+                    strokeWidth="0.5"
+                  />
+                  <text
+                    x="0"
+                    y="2"
+                    textAnchor="middle"
+                    fill="#aaa"
+                    fontSize="4"
+                  >
+                    Shift+C закрыть
+                  </text>
                   <foreignObject x="-20" y="6" width="40" height="18">
-                    <div xmlns="http://www.w3.org/1999/xhtml" style={{ margin: 0, padding: 0 }}>
+                    <div
+                      xmlns="http://www.w3.org/1999/xhtml"
+                      style={{ margin: 0, padding: 0 }}
+                    >
                       <input
                         type="color"
                         defaultValue={fillColor}
-                        onChange={(e) => onStampColorChange(stamp.id, e.target.value)}
-                        style={{ width: "100%", height: "16px", border: "none", cursor: "pointer" }}
+                        onChange={(e) =>
+                          onStampColorChange(stamp.id, e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          height: "16px",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
                       />
                     </div>
                   </foreignObject>
@@ -1046,10 +1309,13 @@ console.log(nodes);
           .map((node) => {
             // Для правого рукава зеркалим X координаты нод
             const isRightSleeve = partCode === "sleeve_right";
-            const allCuffs = partNodes.filter(n => n.node_name.includes("cuff"));
-            const sleeveCx = allCuffs.length >= 2
-              ? (allCuffs[0].x + allCuffs[1].x) / 2
-              : vbW / 2;
+            const allCuffs = partNodes.filter((n) =>
+              n.node_name.includes("cuff"),
+            );
+            const sleeveCx =
+              allCuffs.length >= 2
+                ? (allCuffs[0].x + allCuffs[1].x) / 2
+                : vbW / 2;
             const mirrorX = (x) => sleeveCx - (x - sleeveCx);
 
             const displayX = isRightSleeve ? mirrorX(node.x) : node.x;
@@ -1057,7 +1323,7 @@ console.log(nodes);
 
             const isSelected = selectedNode === node.node_name;
             const label = getNodeLabelRu(node.node_name);
-            
+
             return (
               <g key={`${node.part_code}::${node.node_name}`}>
                 <circle
@@ -1094,23 +1360,32 @@ console.log(nodes);
         {/* Подрезы — точки на подмышках (ступеньки) */}
         {underarmNodes.map((node, i) => {
           const isRightSleeve = partCode === "sleeve_right";
-          const allCuffs = partNodes.filter(n => n.node_name.includes("cuff"));
-          const sleeveCx = allCuffs.length >= 2
-            ? (allCuffs[0].x + allCuffs[1].x) / 2
-            : vbW / 2;
+          const allCuffs = partNodes.filter((n) =>
+            n.node_name.includes("cuff"),
+          );
+          const sleeveCx =
+            allCuffs.length >= 2
+              ? (allCuffs[0].x + allCuffs[1].x) / 2
+              : vbW / 2;
           const mirrorX = (x) => sleeveCx - (x - sleeveCx);
           const dx = isRightSleeve ? mirrorX(node.x) : node.x;
           return (
-            <circle key={`podrez-${i}`} cx={dx} cy={node.y} r="1" fill="#ff4444" stroke="#fff" strokeWidth="1.5"/>
+            <circle
+              key={`podrez-${i}`}
+              cx={dx}
+              cy={node.y}
+              r="1"
+              fill="#ff4444"
+              stroke="#fff"
+              strokeWidth="1.5"
+            />
           );
         })}
-
-        
 
         {/* Dimensions labels + Rulers */}
         {partCode === "back" && (
           <>
-           {/* Left ruler - rows */}
+            {/* Left ruler - rows */}
             <text
               x={-10}
               y={320}
@@ -1119,103 +1394,105 @@ console.log(nodes);
               fontSize="12"
               transform={`rotate(-90, -12, ${calculation.total_rows / 2})`}
             >
-              {calculation.total_rows} рядов 
+              {calculation.total_rows} рядов
             </text>
             {/* Right side - stitches label */}
-             <text
+            <text
               x={300}
               y={280}
               textAnchor="middle"
               fill="rgba(255,255,255,0.6)"
               fontSize="12"
-              
             >
               {calculation.back_width_stitches} петель
             </text>
-          
           </>
         )}
         {partCode === "front" && (
           <>
-            
             {/* Left ruler - rows */}
             <text
               x={-120}
-              y={(calculation.total_rows / 2) + 20}
+              y={calculation.total_rows / 2 + 20}
               textAnchor="middle"
               fill="rgba(255,255,255,0.6)"
               fontSize="12"
               transform={`rotate(-90, -12, ${calculation.total_rows / 2})`}
             >
-              {calculation.total_rows} рядов 
+              {calculation.total_rows} рядов
             </text>
             {/* Right side - stitches label */}
-             <text
+            <text
               y={280}
-              x={(calculation.total_rows / 2) - 20}
+              x={calculation.total_rows / 2 - 20}
               textAnchor="middle"
               fill="rgba(255,255,255,0.6)"
               fontSize="12"
-              
             >
               {calculation.back_width_stitches} петель
             </text>
             {/* Control point labels on ruler */}
-            
-            <text x={-12} y={(calculation.neck_depth_rows / 2) + 35} textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="12" transform={`rotate(-90, -12, ${calculation.neck_depth_rows})`}>
+
+            <text
+              x={-12}
+              y={calculation.neck_depth_rows / 2 + 35}
+              textAnchor="middle"
+              fill="rgba(255,255,255,0.6)"
+              fontSize="12"
+              transform={`rotate(-90, -12, ${calculation.neck_depth_rows})`}
+            >
               {calculation.neck_depth_rows}рядов (горловина)
             </text>
           </>
         )}
-        {(partCode === "sleeve_left" || partCode === "sleeve_right") && (() => {
-          const cuffL = getNodePos("sleeve_cuff_left") || { x: 0, y: 0 };
-          const cuffR = getNodePos("sleeve_cuff_right") || { x: 0, y: 0 };
-          const topL = getNodePos("sleeve_top_left") || { x: 0, y: 0 };
-          const topR = getNodePos("sleeve_top_right") || { x: 0, y: 0 };
-          const cuffW = Math.abs(cuffR.x - cuffL.x);
-          const topW = Math.abs(topR.x - topL.x);
-          const widestW = Math.max(cuffW, topW);
-          const widestLabel = widestW === cuffW ? "манжета" : "окат";
+        {(partCode === "sleeve_left" || partCode === "sleeve_right") &&
+          (() => {
+            const cuffL = getNodePos("sleeve_cuff_left") || { x: 0, y: 0 };
+            const cuffR = getNodePos("sleeve_cuff_right") || { x: 0, y: 0 };
+            const topL = getNodePos("sleeve_top_left") || { x: 0, y: 0 };
+            const topR = getNodePos("sleeve_top_right") || { x: 0, y: 0 };
+            const cuffW = Math.abs(cuffR.x - cuffL.x);
+            const topW = Math.abs(topR.x - topL.x);
+            const widestW = Math.max(cuffW, topW);
+            const widestLabel = widestW === cuffW ? "манжета" : "окат";
 
-          return (
-            <>
-              {/* Widest point label - horizontal at top */}
-              <text
-                x={widestW + 50}
-                y={calculation.sleeve_height_rows + 8}
-                textAnchor="middle"
-                fill="rgba(255,255,255,0.6)"
-                fontSize="12"
-              >
-                {Math.round(widestW)} петель ({widestLabel})
-              </text>
-              {/* Cuff width label - horizontal at bottom */}
-              <text
-                x={widestW + 50}
-                y={calculation.sleeve_height_rows / 2}
-                textAnchor="middle"
-                fill="rgba(255,255,255,0.6)"
-                fontSize="12"
-                
-              >
-                {calculation.sleeve_top_stitches} петель (окат)
-              </text>
-              {/* Left ruler - rows */}
-              <text
-                x={-12}
-                y={calculation.sleeve_height_rows / 2 + 400}
-                textAnchor="middle"
-                fill="rgba(255,255,255,0.6)"
-                fontSize="12"
-                transform={`rotate(-90, -12, ${calculation.sleeve_height_rows / 2})`}
-              >
-                {calculation.sleeve_height_rows} рядов
-              </text>
-              {/* Right side - stitches label */}
-              
-            </>
-          );
-        })()}
+            return (
+              <>
+                {/* Widest point label - horizontal at top */}
+                <text
+                  x={widestW + 50}
+                  y={calculation.sleeve_height_rows + 8}
+                  textAnchor="middle"
+                  fill="rgba(255,255,255,0.6)"
+                  fontSize="12"
+                >
+                  {Math.round(widestW)} петель ({widestLabel})
+                </text>
+                {/* Cuff width label - horizontal at bottom */}
+                <text
+                  x={widestW + 50}
+                  y={calculation.sleeve_height_rows / 2}
+                  textAnchor="middle"
+                  fill="rgba(255,255,255,0.6)"
+                  fontSize="12"
+                >
+                  {calculation.sleeve_top_stitches} петель (окат)
+                </text>
+                {/* Left ruler - rows */}
+                <text
+                  x={-12}
+                  y={calculation.sleeve_height_rows / 2 + 400}
+                  textAnchor="middle"
+                  fill="rgba(255,255,255,0.6)"
+                  fontSize="12"
+                  transform={`rotate(-90, -12, ${calculation.sleeve_height_rows / 2})`}
+                >
+                  {calculation.sleeve_height_rows} рядов
+                </text>
+                {/* Right side - stitches label */}
+              </>
+            );
+          })()}
       </svg>
     </div>
   );
@@ -1248,31 +1525,31 @@ const NODE_NAMES_RU = {
   sleeve_top_left: "Верх рукава",
   sleeve_top_right: "Верх рукава",
   // Set-in sleeve nodes
-  "back_left_neck_": "Горловина",
-  "back_right_neck_": "Горловина",
-  "front_left_neck_": "Горловина",
-  "front_right_neck_": "Горловина",
-  "back_left_shoulder_": "Плечо",
-  "back_right_shoulder_": "Плечо",
-  "front_left_shoulder_": "Плечо",
-  "front_right_shoulder_": "Плечо",
-  "back_left_armhole_": "Пройма",
-  "back_right_armhole_": "Пройма",
-  "front_left_armhole_": "Пройма",
-  "front_right_armhole_": "Пройма",
+  back_left_neck_: "Горловина",
+  back_right_neck_: "Горловина",
+  front_left_neck_: "Горловина",
+  front_right_neck_: "Горловина",
+  back_left_shoulder_: "Плечо",
+  back_right_shoulder_: "Плечо",
+  front_left_shoulder_: "Плечо",
+  front_right_shoulder_: "Плечо",
+  back_left_armhole_: "Пройма",
+  back_right_armhole_: "Пройма",
+  front_left_armhole_: "Пройма",
+  front_right_armhole_: "Пройма",
 };
 
 function getNodeLabelRu(nodeName) {
   // Exact match first
   if (NODE_NAMES_RU[nodeName]) return NODE_NAMES_RU[nodeName];
-  
+
   // Prefix match for set-in nodes (back_left_neck_0, back_left_neck_1, etc.)
   for (const [prefix, label] of Object.entries(NODE_NAMES_RU)) {
     if (prefix.endsWith("_") && nodeName.includes(prefix)) {
       return label;
     }
   }
-  
+
   return nodeName;
 }
 
@@ -1282,7 +1559,7 @@ function formatDecreaseRows(rows, counts) {
   // Sort ascending and pair with counts
   const paired = rows.map((r, i) => ({ row: r, count: counts?.[i] || 1 }));
   paired.sort((a, b) => a.row - b.row);
-  return paired.map(p => `${p.row}(${p.count})`).join(", ");
+  return paired.map((p) => `${p.row}(${p.count})`).join(", ");
 }
 
 // ===== PATTERN STAMP COMPONENT =====
@@ -1356,7 +1633,9 @@ function PatternStamp({
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${patternWidth}, ${cellSize}px)`,
-          gridTemplateRows: rows.map(() => `${cellSize * (gaugeStitchesPerCm / gaugeRowsPerCm)}px`).join(' '),
+          gridTemplateRows: rows
+            .map(() => `${cellSize * (gaugeStitchesPerCm / gaugeRowsPerCm)}px`)
+            .join(" "),
         }}
       >
         {rows.map((row, ri) =>
@@ -1440,7 +1719,9 @@ export default function BlueprintsTab({ projectId }) {
 
   const loadMeasurements = async () => {
     try {
-      const result = await invoke("get_raglan_measurements", { projectId });
+      const result = await invoke("get_project_blueprint_measurements", {
+        projectId,
+      });
       const restored = { ...result };
       // Restore yarn_color from localStorage (most reliable cross-tab persistence)
       const savedYarnColor = localStorage.getItem(`yarn_color_${projectId}`);
@@ -1460,7 +1741,11 @@ export default function BlueprintsTab({ projectId }) {
       const allPatterns = await invoke("get_patterns_for_project", {
         projectId,
       });
-      console.log("[Blueprints] Patterns loaded:", allPatterns?.length || 0, allPatterns);
+      console.log(
+        "[Blueprints] Patterns loaded:",
+        allPatterns?.length || 0,
+        allPatterns,
+      );
       setPatterns(allPatterns);
     } catch (e) {
       console.error("[Blueprints] Failed to load patterns:", e);
@@ -1474,11 +1759,10 @@ export default function BlueprintsTab({ projectId }) {
         projectId,
       });
       setPatternStamps(stamps);
-      console.log(stamps)
+      console.log(stamps);
     } catch (e) {
       console.error("Failed to load pattern stamps:", e);
     }
-    
   };
 
   const loadKnittingSettings = async () => {
@@ -1518,7 +1802,10 @@ export default function BlueprintsTab({ projectId }) {
 
   const recalculate = async () => {
     try {
-      const calc = await invoke("calculate_blueprint", { projectId, sleeveType });
+      const calc = await invoke("calculate_blueprint", {
+        projectId,
+        sleeveType,
+      });
       setCalculation(calc);
       setNodes(calc.nodes || []);
     } catch (e) {
@@ -1528,19 +1815,48 @@ export default function BlueprintsTab({ projectId }) {
   };
 
   const handleSaveMeasurements = async (newMeasurements) => {
+    const yarn_color = newMeasurements.yarn_color
     try {
-      const { yarn_color, ...numericMeasurements } = newMeasurements;
-      const savePromises = Object.entries(numericMeasurements).map(
-        ([key, value]) =>
-          invoke("save_blueprint_measurement", {
-            req: {
-              project_id: projectId,
-              measurement_code: key,
-              value: value,
-              unit: key.includes("gauge") ? "" : "cm",
-            },
-          }),
-      );
+      // 🔹 1. Нормализуем входные данные: приводим к единому формату [{key, value}, ...]
+      let items = [];
+      if (Array.isArray(newMeasurements)) {
+        items = newMeasurements.map((item) => ({
+          key: item.measurement_code || item.code || item.key,
+          value: item.value || item.val,
+        }));
+      } else {
+        items = Object.entries(newMeasurements).map(([key, value]) => ({
+          key,
+          value,
+        }));
+      }
+
+      // 🔹 2. Фильтруем и парсим только валидные числа
+      const validItems = items.filter((item) => {
+        const num = Number(item.value);
+        return (
+          item.key &&
+          !isNaN(num) &&
+          item.value !== null &&
+          item.value !== undefined
+        );
+      });
+
+      // 🔹 3. Отправляем на бэкенд
+      const savePromises = validItems.map(({ key, value }) => {
+        const numericValue = parseFloat(value); // ✅ гарантируем f64
+        console.log(`📤 Sending ${key}: ${numericValue}`); // для отладки
+
+        return invoke("save_blueprint_measurement", {
+          req: {
+            project_id: projectId,
+            measurement_code: key,
+            value: numericValue,
+            unit: key.includes("gauge") ? "" : "cm",
+            note: "",
+          },
+        });
+      });
       // Also save yarn_color as a special measurement (store hex in note field)
       if (yarn_color) {
         savePromises.push(
@@ -1562,9 +1878,11 @@ export default function BlueprintsTab({ projectId }) {
       }
       setMeasurements(newMeasurements);
       await recalculate();
-    } catch (e) {
-      console.error(e);
-      throw e;
+      await Promise.all(savePromises);
+      console.log("✅ Measurements saved successfully");
+    } catch (err) {
+      console.error("❌ Save failed:", err);
+      throw err;
     }
   };
 
@@ -1619,109 +1937,124 @@ export default function BlueprintsTab({ projectId }) {
 
     setIsAddingStamp(true);
     try {
-    const rows = (pattern.pattern_data || "").split("\n").filter(r => r.trim());
-    const stampW = pattern.width;
-    const stampH = rows.length;
+      const rows = (pattern.pattern_data || "")
+        .split("\n")
+        .filter((r) => r.trim());
+      const stampW = pattern.width;
+      const stampH = rows.length;
 
-    // Use exact activePart — nodes are now stored with correct part_code per sleeve
-    const partCodeForNodes = activePart;
+      // Use exact activePart — nodes are now stored with correct part_code per sleeve
+      const partCodeForNodes = activePart;
 
-    const partNodes = nodes.filter(n => n.part_code === partCodeForNodes);
-    if (partNodes.length === 0) return;
+      const partNodes = nodes.filter((n) => n.part_code === partCodeForNodes);
+      if (partNodes.length === 0) return;
 
-    const minX = Math.min(...partNodes.map(n => n.x));
-    const maxX = Math.max(...partNodes.map(n => n.x));
-    const minY = Math.min(...partNodes.map(n => n.y));
-    const maxY = Math.max(...partNodes.map(n => n.y));
+      const minX = Math.min(...partNodes.map((n) => n.x));
+      const maxX = Math.max(...partNodes.map((n) => n.x));
+      const minY = Math.min(...partNodes.map((n) => n.y));
+      const maxY = Math.max(...partNodes.map((n) => n.y));
 
-    // Check if pattern is wider than the widest part of the blueprint
-    const blueprintWidth = maxX - minX;
-    if (stampW > blueprintWidth) {
-      console.error("[Blueprints] Pattern too wide:", stampW, "vs blueprint:", blueprintWidth);
-      // Use alert + toast for guaranteed visibility
-      addToast(`Узор (${stampW} петель) шире выкройки (${Math.round(blueprintWidth)}петель)! Не помещается.`, "error", 4000);
-      return;
-    }
-
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
-    // Filter stamps for overlap check (only stamps on same part)
-    const stampsForOverlap = patternStamps.filter((s) => s.part_code === partCodeForNodes);
-
-    // Find a free position for the stamp using a spiral-like search algorithm
-    const overlapCheck = (px, py) => {
-      return stampsForOverlap.find((s) => {
-        const sx = s.position_x || 0;
-        const sy = s.position_y || 0;
-        const sw = s.width || 1;
-        const sh = s.height || 1;
-        const margin = 1;
-        return !(
-          px + stampW + margin < sx - margin ||
-          px - margin > sx + sw + margin ||
-          py + stampH + margin < sy - margin ||
-          py - margin > sy + sh + margin
+      // Check if pattern is wider than the widest part of the blueprint
+      const blueprintWidth = maxX - minX;
+      if (stampW > blueprintWidth) {
+        console.error(
+          "[Blueprints] Pattern too wide:",
+          stampW,
+          "vs blueprint:",
+          blueprintWidth,
         );
-      });
-    };
+        // Use alert + toast for guaranteed visibility
+        addToast(
+          `Узор (${stampW} петель) шире выкройки (${Math.round(blueprintWidth)}петель)! Не помещается.`,
+          "error",
+          4000,
+        );
+        return;
+      }
 
-    const isOutOfBounds = (px, py) => {
-      return (
-        px < minX || px + stampW > maxX ||
-        py < minY || py + stampH > maxY
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      // Filter stamps for overlap check (only stamps on same part)
+      const stampsForOverlap = patternStamps.filter(
+        (s) => s.part_code === partCodeForNodes,
       );
-    };
 
-    // Try positions: start from center-bottom, then spiral outward
-    // Priority: below center -> above center -> left -> right
-    const searchPositions = [];
-    const stepX = stampW + 2;
-    const stepY = stampH + 2;
-    const maxSteps = 10;
+      // Find a free position for the stamp using a spiral-like search algorithm
+      const overlapCheck = (px, py) => {
+        return stampsForOverlap.find((s) => {
+          const sx = s.position_x || 0;
+          const sy = s.position_y || 0;
+          const sw = s.width || 1;
+          const sh = s.height || 1;
+          const margin = 1;
+          return !(
+            px + stampW + margin < sx - margin ||
+            px - margin > sx + sw + margin ||
+            py + stampH + margin < sy - margin ||
+            py - margin > sy + sh + margin
+          );
+        });
+      };
 
-    // Generate spiral positions: center, then expand outward
-    for (let step = 0; step <= maxSteps; step++) {
-      const offsets = [];
-      if (step === 0) {
-        offsets.push([0, 0]); // center
-      } else {
-        // Bottom
-        offsets.push([0, step * stepY]);
-        // Top
-        offsets.push([0, -step * stepY]);
-        // Left
-        offsets.push([-step * stepX, 0]);
-        // Right
-        offsets.push([step * stepX, 0]);
-        // Diagonals
-        offsets.push([step * stepX, step * stepY]);
-        offsets.push([-step * stepX, step * stepY]);
-        offsets.push([step * stepX, -step * stepY]);
-        offsets.push([-step * stepX, -step * stepY]);
+      const isOutOfBounds = (px, py) => {
+        return (
+          px < minX || px + stampW > maxX || py < minY || py + stampH > maxY
+        );
+      };
+
+      // Try positions: start from center-bottom, then spiral outward
+      // Priority: below center -> above center -> left -> right
+      const searchPositions = [];
+      const stepX = stampW + 2;
+      const stepY = stampH + 2;
+      const maxSteps = 10;
+
+      // Generate spiral positions: center, then expand outward
+      for (let step = 0; step <= maxSteps; step++) {
+        const offsets = [];
+        if (step === 0) {
+          offsets.push([0, 0]); // center
+        } else {
+          // Bottom
+          offsets.push([0, step * stepY]);
+          // Top
+          offsets.push([0, -step * stepY]);
+          // Left
+          offsets.push([-step * stepX, 0]);
+          // Right
+          offsets.push([step * stepX, 0]);
+          // Diagonals
+          offsets.push([step * stepX, step * stepY]);
+          offsets.push([-step * stepX, step * stepY]);
+          offsets.push([step * stepX, -step * stepY]);
+          offsets.push([-step * stepX, -step * stepY]);
+        }
+        for (const [dx, dy] of offsets) {
+          searchPositions.push([
+            centerX - stampW / 2 + dx,
+            centerY - stampH / 2 + dy,
+          ]);
+        }
       }
-      for (const [dx, dy] of offsets) {
-        searchPositions.push([centerX - stampW / 2 + dx, centerY - stampH / 2 + dy]);
+
+      // Find first valid position
+      let foundPos = null;
+      for (const [px, py] of searchPositions) {
+        if (!overlapCheck(px, py) && !isOutOfBounds(px, py)) {
+          foundPos = [px, py];
+          break;
+        }
       }
-    }
 
-    // Find first valid position
-    let foundPos = null;
-    for (const [px, py] of searchPositions) {
-      if (!overlapCheck(px, py) && !isOutOfBounds(px, py)) {
-        foundPos = [px, py];
-        break;
+      if (!foundPos) {
+        addToast("Места на узор не осталось!", "error", 4000);
+        return;
       }
-    }
 
-    if (!foundPos) {
-      addToast("Места на узор не осталось!", "error", 4000);
-      return;
-    }
+      const [posX, posY] = foundPos;
 
-    const [posX, posY] = foundPos;
-
-    console.log("[Blueprints] Adding stamp at:", { posX, posY });
+      console.log("[Blueprints] Adding stamp at:", { posX, posY });
 
       // Save stamp — Rust returns full stamp with pattern_data
       const savedStamp = await invoke("save_blueprint_pattern_stamp", {
@@ -1747,18 +2080,23 @@ export default function BlueprintsTab({ projectId }) {
       });
 
       // Check bounds and notify
-      const partNodesCheck = nodes.filter(n => n.part_code === activePart);
+      const partNodesCheck = nodes.filter((n) => n.part_code === activePart);
       if (partNodesCheck.length > 0) {
-        const minX = Math.min(...partNodesCheck.map(n => n.x));
-        const maxX = Math.max(...partNodesCheck.map(n => n.x));
-        const minY = Math.min(...partNodesCheck.map(n => n.y));
-        const maxY = Math.max(...partNodesCheck.map(n => n.y));
-        const oob = (
-          posX < minX || posX + stampW > maxX ||
-          posY < minY || posY + stampH > maxY
-        );
+        const minX = Math.min(...partNodesCheck.map((n) => n.x));
+        const maxX = Math.max(...partNodesCheck.map((n) => n.x));
+        const minY = Math.min(...partNodesCheck.map((n) => n.y));
+        const maxY = Math.max(...partNodesCheck.map((n) => n.y));
+        const oob =
+          posX < minX ||
+          posX + stampW > maxX ||
+          posY < minY ||
+          posY + stampH > maxY;
         if (oob) {
-          addToast("Узор выходит за границы выкройки! Перетащите его внутрь.", "warning", 5000);
+          addToast(
+            "Узор выходит за границы выкройки! Перетащите его внутрь.",
+            "warning",
+            5000,
+          );
         }
       }
 
@@ -1784,7 +2122,9 @@ export default function BlueprintsTab({ projectId }) {
 
   const handleCloneStamp = async (stampId) => {
     try {
-      const newStamp = await invoke("clone_blueprint_pattern_stamp", { stampId });
+      const newStamp = await invoke("clone_blueprint_pattern_stamp", {
+        stampId,
+      });
       if (newStamp) {
         setPatternStamps((prev) => [...prev, newStamp]);
         setSelectedStamp(newStamp.id);
@@ -1797,9 +2137,7 @@ export default function BlueprintsTab({ projectId }) {
 
   const handleStampColorChange = async (stampId, color) => {
     setPatternStamps((prev) =>
-      prev.map((s) =>
-        s.id === stampId ? { ...s, custom_color: color } : s,
-      ),
+      prev.map((s) => (s.id === stampId ? { ...s, custom_color: color } : s)),
     );
     setStampColorPicker(null);
     // Save color to DB
@@ -1848,13 +2186,22 @@ export default function BlueprintsTab({ projectId }) {
     }
   };
 
- const partStamps = patternStamps.filter((s) => s.part_code === activePart);
+  const partStamps = patternStamps.filter((s) => s.part_code === activePart);
 
   return (
     <div className="blueprints-tab">
       {/* Header */}
       <div className="blueprints-header">
-        <h2>🧵 Выкройка: {calculation?.type === "set_in" ? "Втачной рукав" : calculation?.type === "raglan" ? "Реглан" : sleeveType === "set_in" ? "Втачной рукав" : "Реглан"}</h2>
+        <h2>
+          🧵 Выкройка:{" "}
+          {calculation?.type === "set_in"
+            ? "Втачной рукав"
+            : calculation?.type === "raglan"
+              ? "Реглан"
+              : sleeveType === "set_in"
+                ? "Втачной рукав"
+                : "Реглан"}
+        </h2>
         <div className="blueprints-actions">
           <button
             className="btn-secondary"
@@ -1962,12 +2309,19 @@ export default function BlueprintsTab({ projectId }) {
           {showPatternBrush ? (
             <div className="pattern-brush-panel">
               <h3>🖌 Кисть узора</h3>
-              <p className="hint">Выберите узор и нажмите «Добавить на выкройку»</p>
+              <p className="hint">
+                Выберите узор и нажмите «Добавить на выкройку»
+              </p>
               <div className="pattern-grid">
                 {patterns.map((p, idx) => {
-                  const rows = (p.pattern_data || "").split("\n").filter(r => r.trim());
+                  const rows = (p.pattern_data || "")
+                    .split("\n")
+                    .filter((r) => r.trim());
                   const isSelected = selectedPatternForBrush === p.id;
-                  const cellSize = Math.max(1, Math.floor(50 / Math.max(p.width, p.height)));
+                  const cellSize = Math.max(
+                    1,
+                    Math.floor(50 / Math.max(p.width, p.height)),
+                  );
                   return (
                     <div
                       key={`pat-${p.id}-${idx}-${p.name}`}
@@ -1991,10 +2345,11 @@ export default function BlueprintsTab({ projectId }) {
                               style={{
                                 width: cellSize,
                                 height: cellSize,
-                                background: cell === "1" ? "#2196F3" : "transparent",
+                                background:
+                                  cell === "1" ? "#2196F3" : "transparent",
                               }}
                             />
-                          ))
+                          )),
                         )}
                       </div>
                       <span className="pattern-tile-name">{p.name}</span>
@@ -2006,7 +2361,11 @@ export default function BlueprintsTab({ projectId }) {
                 )}
               </div>
               {selectedPatternForBrush && (
-                <button className="btn-primary" onClick={handleAddPatternStamp} disabled={isAddingStamp}>
+                <button
+                  className="btn-primary"
+                  onClick={handleAddPatternStamp}
+                  disabled={isAddingStamp}
+                >
                   {isAddingStamp ? "Добавление..." : "Добавить на выкройку"}
                 </button>
               )}
@@ -2076,7 +2435,7 @@ export default function BlueprintsTab({ projectId }) {
                     Ряды:{" "}
                     {formatDecreaseRows(
                       calculation.back_decrease_rows,
-                      calculation.back_decrease_counts
+                      calculation.back_decrease_counts,
                     )}
                   </p>
                   <p>Всего убавок: {calculation.total_decreases} п.</p>
@@ -2085,7 +2444,8 @@ export default function BlueprintsTab({ projectId }) {
                     Ряд подреза: {calculation.raglan_start_row_front} от подола
                   </p>
                   <p className="podrez-info">
-                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с каждой стороны
+                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с
+                    каждой стороны
                   </p>
                   <h4>Горловина (спинка)</h4>
                   <p>Ширина: {calculation.neck_width_stitches} п.</p>
@@ -2101,7 +2461,7 @@ export default function BlueprintsTab({ projectId }) {
                     Ряды:{" "}
                     {formatDecreaseRows(
                       calculation.front_decrease_rows,
-                      calculation.front_decrease_counts
+                      calculation.front_decrease_counts,
                     )}
                   </p>
                   <h4>Подрезы (перед)</h4>
@@ -2109,121 +2469,114 @@ export default function BlueprintsTab({ projectId }) {
                     Ряд подреза: {calculation.raglan_start_row_front} от подола
                   </p>
                   <p className="podrez-info">
-                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с каждой стороны
+                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с
+                    каждой стороны
                   </p>
                   <h4>Горловина ({necklineType}-вырез)</h4>
                   <p>
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.neck_decrease_rows,
-                      calculation.neck_decrease_counts
+                      calculation.neck_decrease_counts,
                     )}
                   </p>
                   <p>Глубина: {calculation.neck_depth_rows} рядов</p>
                 </>
               )}
-              {calculation.type === "raglan" && activePart === "sleeve_left" && (
-                <>
-                  <h4>Рукав левый — размеры</h4>
-                  <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
-                  <p>Ширина оката: {calculation.sleeve_top_stitches} п.</p>
-                  <p>Высота: {calculation.sleeve_height_rows} р.</p>
-                  <h4>Рукав левый — прибавки</h4>
-                  <p className="podrez-info">
-                    Прибавлять с обеих сторон:
-                  </p>
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(calculation.sleeve_increase_rows)}
-                  </p>
-                  <h4>Подрез рукава</h4>
-                  <p className="podrez-info">
-                    Ряд подреза: {calculation.sleeve_shoulder_cut_rows} от манжеты
-                  </p>
-                  <p className="podrez-info">
-                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с каждой стороны
-                  </p>
-                  <h4>Рукав левый — убавки оката</h4>
-                  <p className="podrez-info">
-                    🔻 Убавлять СЛЕВА (перед):
-                  </p>
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(
-                      calculation.sleeve_raglan_rows_front
-                    )}
-                  </p>
-                  <p className="podrez-info">
-                    🔻 Убавлять СПРАВА (спинка):
-                  </p>
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(
-                      calculation.sleeve_raglan_rows_back
-                    )}
-                  </p>
-                  <p>Скос вершины: {calculation.sleeve_cap_offset.toFixed(1)}</p>
-                </>
-              )}
-              {calculation.type === "raglan" && activePart === "sleeve_right" && (
-                <>
-                  <h4>Рукав правый — размеры</h4>
-                  <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
-                  <p>Ширина оката: {calculation.sleeve_top_stitches} п.</p>
-                  <p>Высота: {calculation.sleeve_height_rows} р.</p>
-                  <h4>Рукав правый — прибавки</h4>
-                  <p className="podrez-info">
-                    Прибавлять с обеих сторон:
-                  </p>
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(calculation.sleeve_increase_rows)}
-                  </p>
-                  <h4>Подрез рукава</h4>
-                  <p className="podrez-info">
-                    Ряд подреза: {calculation.sleeve_shoulder_cut_rows} от манжеты
-                  </p>
-                  <p className="podrez-info">
-                    Ширина подреза: {calculation.decrease_shoulder_cuts} п. с каждой стороны
-                  </p>
-                  <h4>Рукав правый — убавки оката (ЗЕРКАЛЬНО)</h4>
-                  <p className="podrez-info">
-                    🔻 Убавлять СПРАВА (перед):
-                  </p>
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(
-                      calculation.sleeve_raglan_rows_back
-                    )}
-                  </p>
-                  <p className="podrez-info">
-                    🔻 Убавлять СЛЕВА (спинка):
-                  </p>
-                  
-                  <p>
-                    Ряды:{" "}
-                    {formatDecreaseRows(
-                      calculation.sleeve_raglan_rows_front
-                    )}
-                  </p>
-                  
-                  <p>Скос вершины: {calculation.sleeve_cap_offset.toFixed(1)}</p>
-                </>
-              )}
+              {calculation.type === "raglan" &&
+                activePart === "sleeve_left" && (
+                  <>
+                    <h4>Рукав левый — размеры</h4>
+                    <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
+                    <p>Ширина оката: {calculation.sleeve_top_stitches} п.</p>
+                    <p>Высота: {calculation.sleeve_height_rows} р.</p>
+                    <h4>Рукав левый — прибавки</h4>
+                    <p className="podrez-info">Прибавлять с обеих сторон:</p>
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_increase_rows)}
+                    </p>
+                    <h4>Подрез рукава</h4>
+                    <p className="podrez-info">
+                      Ряд подреза: {calculation.sleeve_shoulder_cut_rows} от
+                      манжеты
+                    </p>
+                    <p className="podrez-info">
+                      Ширина подреза: {calculation.decrease_shoulder_cuts} п. с
+                      каждой стороны
+                    </p>
+                    <h4>Рукав левый — убавки оката</h4>
+                    <p className="podrez-info">🔻 Убавлять СЛЕВА (перед):</p>
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_raglan_rows_front)}
+                    </p>
+                    <p className="podrez-info">🔻 Убавлять СПРАВА (спинка):</p>
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_raglan_rows_back)}
+                    </p>
+                    <p>
+                      Скос вершины: {calculation.sleeve_cap_offset.toFixed(1)}
+                    </p>
+                  </>
+                )}
+              {calculation.type === "raglan" &&
+                activePart === "sleeve_right" && (
+                  <>
+                    <h4>Рукав правый — размеры</h4>
+                    <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
+                    <p>Ширина оката: {calculation.sleeve_top_stitches} п.</p>
+                    <p>Высота: {calculation.sleeve_height_rows} р.</p>
+                    <h4>Рукав правый — прибавки</h4>
+                    <p className="podrez-info">Прибавлять с обеих сторон:</p>
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_increase_rows)}
+                    </p>
+                    <h4>Подрез рукава</h4>
+                    <p className="podrez-info">
+                      Ряд подреза: {calculation.sleeve_shoulder_cut_rows} от
+                      манжеты
+                    </p>
+                    <p className="podrez-info">
+                      Ширина подреза: {calculation.decrease_shoulder_cuts} п. с
+                      каждой стороны
+                    </p>
+                    <h4>Рукав правый — убавки оката (ЗЕРКАЛЬНО)</h4>
+                    <p className="podrez-info">🔻 Убавлять СПРАВА (перед):</p>
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_raglan_rows_back)}
+                    </p>
+                    <p className="podrez-info">🔻 Убавлять СЛЕВА (спинка):</p>
+
+                    <p>
+                      Ряды:{" "}
+                      {formatDecreaseRows(calculation.sleeve_raglan_rows_front)}
+                    </p>
+
+                    <p>
+                      Скос вершины: {calculation.sleeve_cap_offset.toFixed(1)}
+                    </p>
+                  </>
+                )}
 
               {/* === SET-IN calculation info === */}
               {calculation.type === "set_in" && activePart === "back" && (
                 <>
                   <h4>Спинка — размеры (Втачной)</h4>
                   <p>Ширина низа: {calculation.hem_width_stitches} п.</p>
-                  <p>Ширина подмышки: {calculation.underarm_width_stitches} п.</p>
+                  <p>
+                    Ширина подмышки: {calculation.underarm_width_stitches} п.
+                  </p>
                   <p>Высота изделия: {calculation.total_garment_rows} р.</p>
                   <h4>Пройма — убавки</h4>
                   <p>
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.armhole_decrease_rows,
-                      calculation.armhole_decrease_counts
+                      calculation.armhole_decrease_counts,
                     )}
                   </p>
                   <p>Высота проймы: {calculation.armhole_height_rows} р.</p>
@@ -2233,7 +2586,7 @@ export default function BlueprintsTab({ projectId }) {
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.neck_decreases_rows_back,
-                      calculation.neck_decreases_counts_back
+                      calculation.neck_decreases_counts_back,
                     )}
                   </p>
                   <h4>Скос плеча</h4>
@@ -2241,27 +2594,37 @@ export default function BlueprintsTab({ projectId }) {
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.shoulder_decrease_rows,
-                      calculation.shoulder_decrease_counts
+                      calculation.shoulder_decrease_counts,
                     )}
                   </p>
-                  <p>Начало скоса: {calculation.start_shoulder_slope_row} ряд</p>
+                  <p>
+                    Начало скоса: {calculation.start_shoulder_slope_row} ряд
+                  </p>
                   <h4>Талия</h4>
-                  <p>Убавки (бёдра → талия): {calculation.waist_decreases?.length || 0} раз(а)</p>
-                  <p>Прибавки (талия → грудь): {calculation.waist_increases?.length || 0} раз(а)</p>
+                  <p>
+                    Убавки (бёдра → талия):{" "}
+                    {calculation.waist_decreases?.length || 0} раз(а)
+                  </p>
+                  <p>
+                    Прибавки (талия → грудь):{" "}
+                    {calculation.waist_increases?.length || 0} раз(а)
+                  </p>
                 </>
               )}
               {calculation.type === "set_in" && activePart === "front" && (
                 <>
                   <h4>Перед — размеры (Втачной)</h4>
                   <p>Ширина низа: {calculation.hem_width_stitches} п.</p>
-                  <p>Ширина подмышки: {calculation.underarm_width_stitches} п.</p>
+                  <p>
+                    Ширина подмышки: {calculation.underarm_width_stitches} п.
+                  </p>
                   <p>Высота изделия: {calculation.total_garment_rows} р.</p>
                   <h4>Пройма — убавки</h4>
                   <p>
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.armhole_decrease_rows,
-                      calculation.armhole_decrease_counts
+                      calculation.armhole_decrease_counts,
                     )}
                   </p>
                   <h4>Горловина ({necklineType}-вырез)</h4>
@@ -2270,29 +2633,31 @@ export default function BlueprintsTab({ projectId }) {
                     Убавки:{" "}
                     {formatDecreaseRows(
                       calculation.neck_decreases_rows_front,
-                      calculation.neck_decreases_counts_front
+                      calculation.neck_decreases_counts_front,
                     )}
                   </p>
                   <p>Глубина: {calculation.neck_depth_rows} рядов</p>
                 </>
               )}
-              {calculation.type === "set_in" && (activePart === "sleeve_left" || activePart === "sleeve_right") && (
-                <>
-                  <h4>Рукав — размеры (Втачной)</h4>
-                  <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
-                  <p>Ширина оката: {calculation.sleeve_widest_stitches} п.</p>
-                  <p>Длина до оката: {calculation.sleeve_body_rows} р.</p>
-                  <p>Высота оката: {calculation.sleeve_cap_height_rows} р.</p>
-                  <h4>Окат — убавки</h4>
-                  <p>
-                    Убавки:{" "}
-                    {formatDecreaseRows(
-                      calculation.sleeve_cap_decrease_rows,
-                      calculation.sleeve_cap_decrease_counts
-                    )}
-                  </p>
-                </>
-              )}
+              {calculation.type === "set_in" &&
+                (activePart === "sleeve_left" ||
+                  activePart === "sleeve_right") && (
+                  <>
+                    <h4>Рукав — размеры (Втачной)</h4>
+                    <p>Ширина манжеты: {calculation.sleeve_cuff_stitches} п.</p>
+                    <p>Ширина оката: {calculation.sleeve_widest_stitches} п.</p>
+                    <p>Длина до оката: {calculation.sleeve_body_rows} р.</p>
+                    <p>Высота оката: {calculation.sleeve_cap_height_rows} р.</p>
+                    <h4>Окат — убавки</h4>
+                    <p>
+                      Убавки:{" "}
+                      {formatDecreaseRows(
+                        calculation.sleeve_cap_decrease_rows,
+                        calculation.sleeve_cap_decrease_counts,
+                      )}
+                    </p>
+                  </>
+                )}
             </div>
           )}
         </div>

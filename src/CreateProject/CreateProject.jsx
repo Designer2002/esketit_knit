@@ -536,8 +536,8 @@ export default function CreateProject() {
             <div className="preview-3d preview-3d-compact">
               <Sweater3DPreview
                 height={400}
-                // 🔹 Используем рассчитанные nodes или fallback
-                nodes={calculatedData?.nodes || blueprintNodeArray}
+                // 🔹 Используем рассчитанные nodes
+                nodes={calculatedData?.nodes}
                 // 🔹 Передаём новые данные для позиционирования
                 stitchData={calculatedData?.blueprint_stitch_data}
                 rowData={calculatedData?.blueprint_row_data}

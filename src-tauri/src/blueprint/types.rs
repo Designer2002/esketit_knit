@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
+use sqlx::{FromRow, Row};
 use super::traits::Calculation;
 
 /// One group of decreases (используется в втачном рукаве и горловине)
@@ -221,18 +221,6 @@ pub struct BlueprintMeasurement {
     pub note: Option<String>,
 }
 
-/// Pattern info for blueprint brush
-#[derive(Debug, Serialize, Deserialize, FromRow)]
-pub struct PatternInfo {
-    pub id: i64,
-    pub name: String,
-    pub pattern_type: String,
-    pub width: i64,
-    pub height: i64,
-    pub pattern_data: String,
-    pub category: Option<String>,
-}
-
 /// Blueprint template
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct BlueprintTemplate {
@@ -256,6 +244,50 @@ pub struct BlueprintNode {
     pub constraint_type: Option<String>,
     pub constraint_value: Option<f64>,
     pub was_manually_moved: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct InsertBlueprintNode {
+    pub blueprint_id: i64,
+    pub node_name: String,
+    pub x: f64,
+    pub y: f64,
+    pub is_movable: bool,
+    pub is_required: bool,
+    pub tooltip: Option<String>,
+    pub config: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlueprintNodePosition {
+    pub node_name: String,
+    pub x: f64,
+    pub y: f64,
+    pub part_code: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BlueprintNodeDTO {
+    pub node_name: String,
+    pub x: f64,
+    pub y: f64,
+    pub part_code: String,
+    pub was_manually_moved: bool
+}
+
+impl From<(BlueprintNodePosition, i64)> for InsertBlueprintNode {
+    fn from((n, blueprint_id): (BlueprintNodePosition, i64)) -> Self {
+        Self {
+            blueprint_id,
+            node_name: n.node_name,
+            x: n.x,
+            y: n.y,
+            is_movable: false,
+            is_required: true,
+            tooltip: None,
+            config: None,
+        }
+    }
 }
 
 /// Request for saving blueprint nodes
@@ -295,14 +327,43 @@ pub struct BlueprintPatternStamp {
     pub z_order: i32,
 }
 
-/// Knitting settings for blueprint
+// ===== ТИПЫ ДАННЫХ (актуальные) =====
 #[derive(Debug, Serialize, Deserialize, FromRow)]
+pub struct PatternInfo {
+    pub id: i64, pub name: String, pub pattern_type: String,
+    pub width: i64, pub height: i64, pub pattern_data: String,
+    pub category: Option<String>,
+}
+
+impl From<&sqlx::sqlite::SqliteRow> for BlueprintMeasurement {
+    fn from(row: &sqlx::sqlite::SqliteRow) -> Self {
+        BlueprintMeasurement {
+            id: row.get("id"), project_id: row.get("project_id"),
+            measurement_code: row.get("measurement_code"), value: row.get("value"),
+            unit: row.get("unit"), is_default: row.get::<i64, _>("is_default"),
+            note: row.get("note"),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BlueprintKnittingSettings {
-    pub id: i64,
-    pub project_id: i64,
-    pub boundary_mode: String,
-    pub empty_row_mode: String,
-    pub auto_calculate_nodes: bool,
+    pub id: i64, pub project_id: i64, pub boundary_mode: String,
+    pub empty_row_mode: String, pub auto_calculate_nodes: bool,
+    pub needle_boundary_left: Option<i32>, pub needle_boundary_right: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GarmentRowInfo {
+    pub row: i32, pub part_code: String, pub stitches: i32,
+    pub action: Option<String>, pub action_detail: Option<String>,
+    pub is_pattern_row: bool, pub pattern_id: Option<i64>, pub pattern_name: Option<String>,
+    pub decrease_left: bool, pub decrease_right: bool, pub decrease_count: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GarmentRowRange {
+    pub start_row: i32, pub end_row: i32, pub part_code: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -325,6 +386,7 @@ pub struct RaglanSleeveDimensions {
     pub slope_start_x: f64,
     pub slope_end_x: f64,
     pub raglan_line_rows: i32,          // длина реглан-линии в рядах
+    pub sleeve_len_rows: i32,
     pub cuff_stitches: i32,
     pub start_raglan_stitches: i32,
     pub decrease_shoulders_stitches: i32,

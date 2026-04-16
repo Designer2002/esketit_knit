@@ -90,8 +90,6 @@ pub fn run() {
             get_blueprint_nodes,
             save_blueprint_measurement,
             get_project_blueprint_measurements,
-            get_raglan_measurements,
-            calculate_raglan_pattern,
             update_blueprint_node,
             get_custom_blueprint_nodes,
             save_blueprint_pattern_stamp,
@@ -101,8 +99,6 @@ pub fn run() {
             clone_blueprint_pattern_stamp,
             save_blueprint_knitting_settings,
             get_blueprint_knitting_settings,
-            get_project_sleeve_type,
-            save_project_sleeve_type,
             calculate_blueprint,
             get_patterns_for_project,
             // Garment row-by-row knitting
@@ -111,7 +107,7 @@ pub fn run() {
             get_garment_part_row_range,
             save_garment_progress,
             load_garment_progress,
-            recalculate_blueprint_from_nodes,
+            calculate_blueprint,
         ])
         
         // Обработка закрытия окон

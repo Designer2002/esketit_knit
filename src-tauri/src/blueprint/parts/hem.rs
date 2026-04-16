@@ -35,14 +35,12 @@ impl HemPart {
                 x: cx - half_w,
                 y: hem_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: if self.is_back { "back_right_hem".into() } else { "front_right_hem".into() },
                 x: cx + half_w,
                 y: hem_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
         ]
     }

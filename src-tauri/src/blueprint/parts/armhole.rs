@@ -47,28 +47,24 @@ impl ArmholePart {
                 x: cx - half_w,
                 y: underarm_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: if is_back { "back_right_underarm".into() } else { "front_right_underarm".into() },
                 x: cx + half_w,
                 y: underarm_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: if is_back { "back_left_shoulder".into() } else { "front_left_shoulder".into() },
                 x: cx - half_w + cut,
                 y: underarm_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: if is_back { "back_right_shoulder".into() } else { "front_right_shoulder".into() },
                 x: cx + half_w - cut,
                 y: underarm_y,
                 part_code: part_code.into(),
-                was_manually_moved: false,
             },
         ]
     }

@@ -84,7 +84,8 @@ impl SleeveType for RaglanSleeve {
             cuff_stitches: sleeve_cuff_stitches,
             raglan_line_rows: raglan_line_rows_front,
             start_raglan_stitches: start_raglan_stitches,
-            decrease_shoulders_stitches
+            decrease_shoulders_stitches,
+            sleeve_len_rows: (m.dr * r).round() as i32
         };
 
         SleeveDimensions::Raglan(raglan_specific)
@@ -130,14 +131,12 @@ impl SleeveType for RaglanSleeve {
                 x: cx - half_cuff,
                 y: cuff_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "sleeve_cuff_right".into(),
                 x: cx + half_cuff,
                 y: cuff_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
 
             // === Подрезы (макс. ширина) ===
@@ -146,14 +145,12 @@ impl SleeveType for RaglanSleeve {
                 x: cx - sleeve_widest / 2.0,
                 y: cut_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "sleeve_cut_right".into(),
                 x: cx + sleeve_widest / 2.0,
                 y: cut_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
 
             // === Подмышки (начало реглан-линии) ===
@@ -162,14 +159,12 @@ impl SleeveType for RaglanSleeve {
                 x: cx - underarm_x_offset,
                 y: cut_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "sleeve_underarm_right".into(),
                 x: cx + underarm_x_offset,
                 y: cut_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
 
             // === Верх рукава (горловина) ===
@@ -178,14 +173,12 @@ impl SleeveType for RaglanSleeve {
                 x: cx - half_top,
                 y: base_y,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "sleeve_top_right".into(),
                 x: cx + half_top,
                 y: base_y + slope_drop,
                 part_code: "sleeve_left".into(),
-                was_manually_moved: false,
             },
         ]
     }

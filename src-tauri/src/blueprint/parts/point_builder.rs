@@ -130,7 +130,6 @@ pub fn pts_to_nodes(
             x: *x,
             y: *y,
             part_code: part_code.to_string(),
-            was_manually_moved: false,
         })
         .collect()
 }

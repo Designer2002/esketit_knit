@@ -347,6 +347,5 @@ fn bp(name: &str, x: f64, y: f64, part: &str) -> BlueprintNodePosition {
         x,
         y,
         part_code: part.into(),
-        was_manually_moved: false,
     }
 }

@@ -47,21 +47,18 @@ impl NecklinePart {
                 x: cx - half_w,
                 y: neck_y_shoulder,
                 part_code: "front".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "front_neck_right".into(),
                 x: cx + half_w,
                 y: neck_y_shoulder,
                 part_code: "front".into(),
-                was_manually_moved: false,
             },
             BlueprintNodePosition {
                 node_name: "front_neck_center".into(),
                 x: cx,
                 y: hem_y - (total_rows) as f64,
                 part_code: "front".into(),
-                was_manually_moved: false,
             },
         ]
     }
