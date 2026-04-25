@@ -91,11 +91,23 @@ function mapTo3D(stamp, bounds2D, mesh) {
 }
 
 // ===== 🎨 Один decal =====
-function PatternDecalItem({ garmentMesh, stamp, bounds2D }) {
-  if (!garmentMesh || !garmentMesh.isMesh) {
-    console.warn("⚠️ PatternDecalItem: mesh is not ready or invalid");
-    return null;
-  }
+function PatternDecalItem({ stamp, bounds2D, garmentMesh }) {
+  const decalRef = useRef();
+  const parentMeshRef = useRef(null);
+
+  // Находим родительский меш при монтировании
+  useEffect(() => {
+    if (decalRef.current) {
+      let parent = decalRef.current.parent;
+      while (parent) {
+        if (parent.isMesh) {
+          parentMeshRef.current = parent;
+          break;
+        }
+        parent = parent.parent;
+      }
+    }
+  }, []);
   if (!bounds2D?.[stamp.part_code] || !stamp.pattern_data) {
     console.warn(
       "⚠️ No bounds or pattern data for part_code:",
@@ -133,10 +145,9 @@ function PatternDecalItem({ garmentMesh, stamp, bounds2D }) {
   }
   console.log("📌 DecalItem:", { stamp, mapped });
   const SCALE = 0.5;
-
   return (
     <Decal
-      mesh={garmentMesh}
+      ref={decalRef}
       position={mapped.position}
       rotation={mapped.rotation}
       scale={[stamp.width * SCALE, stamp.height * SCALE, 10]}
@@ -429,19 +440,21 @@ export function Sweater3DPreview({
           color={accentColor}
         />
 
-        {/* 🧶 Только одежда — человек убран */}
-        <GarmentModel
-          measurements={measurements}
-          textureUrl={textureUrl}
-          accentColor={accentColor}
-          onMeshReady={setGarmentMesh}
-          scaleFactor={scaleFactor}
-          offsetY={offsetY}
-        />
-
-        {garmentMesh && bounds2D && stamps?.length > 0 && (
-          <group>
-            {stamps
+        <group>
+          {/* 🧶 Только одежда — человек убран */}
+          <GarmentModel
+            measurements={measurements}
+            textureUrl={textureUrl}
+            accentColor={accentColor}
+            onMeshReady={setGarmentMesh}
+            scaleFactor={scaleFactor}
+            offsetY={offsetY}
+          />
+          ```
+          {garmentMesh &&
+            bounds2D &&
+            stamps?.length > 0 &&
+            stamps
               .filter((stamp) => bounds2D[stamp.part_code])
               .map((stamp) => (
                 <PatternDecalItem
@@ -451,8 +464,7 @@ export function Sweater3DPreview({
                   garmentMesh={garmentMesh}
                 />
               ))}
-          </group>
-        )}
+        </group>
 
         <ContactShadows
           position={[0, -90, 0]}

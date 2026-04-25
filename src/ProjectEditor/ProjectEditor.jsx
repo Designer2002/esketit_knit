@@ -23,6 +23,7 @@ export default function ProjectEditor() {
   const [selectedPatternForKnitting, setSelectedPatternForKnitting] = useState(null);
   const [bounds2D, setBounds2D] = useState({});
 const handleBoundsUpdate = useCallback((partCode, newBounds) => {
+  console.log(`📦 bounds2D update for ${partCode}:`, newBounds);
   setBounds2D(prev => {
     const prevBounds = prev[partCode];
     
@@ -32,11 +33,12 @@ const handleBoundsUpdate = useCallback((partCode, newBounds) => {
         prevBounds.maxX === newBounds.maxX &&
         prevBounds.minY === newBounds.minY &&
         prevBounds.maxY === newBounds.maxY) {
+      console.log(`⏭️ Skipping bounds update for ${partCode} - no changes`);
       return prev; // ← тот же объект = нет ре-рендера!
     }
     
     // Иначе обновляем
-    return {
+    const updated = {
       ...prev,
       [partCode]: {
         ...newBounds,
@@ -44,6 +46,8 @@ const handleBoundsUpdate = useCallback((partCode, newBounds) => {
         height: newBounds.maxY - newBounds.minY,
       }
     };
+    console.log(`✅ Updated bounds2D state:`, updated);
+    return updated;
   });
 }, []); // 👈 пустой массив зависимостей = функция не меняется
   // Загрузка темы и применение при изменении

@@ -384,12 +384,35 @@ function BlueprintSVG({
   const vbW = calculation?.viewbox_width || 100;
   const vbH = calculation?.viewbox_height || 100;
 
-  const bounds = useMemo(() => buildBounds2D(nodes), [nodes]);
-    useEffect(() => {
-  if (bounds && onBoundsUpdate) {
-    onBoundsUpdate(partCode, bounds);
-  }
-}, [bounds, partCode, onBoundsUpdate]); 
+  // Фильтруем узлы только для текущей детали
+  const partNodes = useMemo(() => 
+    nodes.filter((n) => n.part_code === partCode), 
+    [nodes, partCode]
+  );
+
+  // Рассчитываем 2D границы только для узлов текущей детали
+  const bounds = useMemo(() => {
+    if (!partNodes || partNodes.length === 0) {
+      console.log(`⚠️ No partNodes for ${partCode}, nodes total:`, nodes?.length);
+      return null;
+    }
+    
+    const result = {
+      minX: Math.min(...partNodes.map((n) => n.x)),
+      maxX: Math.max(...partNodes.map((n) => n.x)),
+      minY: Math.min(...partNodes.map((n) => n.y)),
+      maxY: Math.max(...partNodes.map((n) => n.y)),
+    };
+    
+    console.log(`✅ Bounds calculated for ${partCode}:`, result, `from ${partNodes.length} nodes`);
+    return result;
+  }, [partNodes, partCode, nodes]);
+
+  useEffect(() => {
+    if (bounds && onBoundsUpdate) {
+      onBoundsUpdate(partCode, bounds);
+    }
+  }, [bounds, partCode, onBoundsUpdate]); 
 
   // SVG-based stamp dragging
   const handleStampMouseDown = (e, stampId) => {
@@ -463,12 +486,7 @@ function BlueprintSVG({
   }, []);
 
   const padding = 10;
-  const partNodes = useMemo(() => 
-  nodes.filter((n) => n.part_code === partCode), 
-  [nodes, partCode]  // 👈 пересчитываем только при реальном изменении
-);
-
-  
+  // partNodes уже определён выше (строка 388), используем его
 
   // Фильтруем только КЛЮЧЕВЫЕ узлы (не промежуточные pts)
   // Промежуточные узлы имеют числовой суффикс: armhole_0, shoulder_1, neck_2 и т.д.
@@ -1750,7 +1768,13 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
         sleeveType,
       });
       setCalculation(calc);
-      setNodes(calc.nodes || []);
+      const newNodes = calc.nodes || [];
+      console.log("🔵 Nodes loaded from calculation:", newNodes?.length || 0, "nodes");
+      if (newNodes.length > 0) {
+        console.log("🔵 First node sample:", newNodes[0]);
+        console.log("🔵 Unique part_codes:", [...new Set(newNodes.map(n => n.part_code))]);
+      }
+      setNodes(newNodes);
     } catch (e) {
       console.error("Failed to calculate blueprint:", e);
       addToast("Ошибка расчёта: " + e, "error");
