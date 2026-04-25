@@ -1,87 +1,86 @@
-import React, { useState, useEffect, useRef, Suspense, useMemo, useContext } from "react";
+import React, { useState, useEffect, Suspense, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import Sweater3DPreview from "../Sweater3D/Sweater3D";
 import "./RenderTab.css";
-import BlueprintsTab from "../BlueprintsTab/BlueprintsTab";
+
+// 🔹 Вычисляем 2D-границы прямо здесь, чтобы не зависеть от BlueprintsTab
+function buildBounds2D(nodes) {
+  const grouped = {};
+  nodes.forEach((n) => {
+    if (!grouped[n.part_code]) grouped[n.part_code] = [];
+    grouped[n.part_code].push(n);
+  });
+  const bounds = {};
+  Object.entries(grouped).forEach(([part, list]) => {
+    bounds[part] = {
+      minX: Math.min(...list.map((n) => n.x)),
+      maxX: Math.max(...list.map((n) => n.x)),
+      minY: Math.min(...list.map((n) => n.y)),
+      maxY: Math.max(...list.map((n) => n.y)),
+    };
+  });
+  return bounds;
+}
 
 function adaptMeasurementsArray(meas) {
-  if (!Array.isArray(meas)) return meas;
-  
+  if (!Array.isArray(meas)) return meas || {};
   return meas.reduce((acc, item) => {
-    if (item?.key && item?.value !== undefined) {
-      acc[item.key] = item.value;
-    }
+    if (item?.key && item?.value !== undefined) acc[item.key] = item.value;
     return acc;
   }, {});
 }
 
-// ===== Маппинг: бэкенд → 3D-компонент =====
-// Ключи с бэкенда (из measurements) → ключи для useMeasurements
 const MEASUREMENTS_MAPPING = {
-  // Обхваты (0 = база, 1 = макс. расширение)
   chest_circumference: "chest",
   waist_circumference: "waist",
   hip_circumference: "hips",
   neck_circumference: "neck",
   upperarm_circumference: "armWidth",
   wrist_circumference: "wrist",
-  
-  // Длины
   garment_length: "bodyLength",
   sleeve_length: "sleeveLength",
   shoulder_length: "shoulderLength",
   shoulder_height: "shoulderHeight",
-  
-  // Глубина выреза (0 = мелко, 1 = глубоко)
   neck_depth: "neckDepth",
 };
 
-// ===== Нормализация значений: приводим к диапазону 0..1 =====
 function normalizeMeasurement(value, min, max, defaultValue = 0) {
   if (value === null || value === undefined) return defaultValue;
   const clamped = Math.min(Math.max(value, min), max);
-  return (clamped - min) / (max - min); // мапим [min, max] → [0, 1]
+  return (clamped - min) / (max - min);
 }
 
-export default function RenderTab({ projectId, bounds2D }) {
+export default function RenderTab({ projectId }) { // 🔹 убрали bounds2D из пропсов
   const [calculation, setCalculation] = useState(null);
   const [sleeveType, setSleeveType] = useState("raglan");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Данные для 3D
   const [patternStamps, setPatternStamps] = useState([]);
-  const [patterns, setPatterns] = useState([]);
   const [rawMeasurements, setRawMeasurements] = useState(null);
-  
-  // 🔥 Преобразованные мерки для 3D-компонента (мемоизируем!)
+
+  // 🔹 Вычисляем bounds2D локально из загруженных узлов
+  const bounds2D = useMemo(() => {
+    if (calculation?.nodes) return buildBounds2D(calculation.nodes);
+    return {};
+  }, [calculation?.nodes]);
+
   const measurements3D = useMemo(() => {
     if (!rawMeasurements) return {};
-    
     const normalized = {};
-    
-    // 📏 Примерные диапазоны (подстрой под свои данные!)
     const ranges = {
-      chest_circumference: [80, 120],      // см
-      waist_circumference: [60, 100],
-      hip_circumference: [85, 130],
-      neck_circumference: [30, 50],
-      upperarm_circumference: [25, 45],
-      wrist_circumference: [14, 22],
-      garment_length: [40, 80],             // см
-      sleeve_length: [50, 70],
-      shoulder_length: [10, 20],
-      shoulder_height: [10, 25],
-      neck_depth: [5, 25],                  // см, глубина выреза
+      chest_circumference: [80, 120], waist_circumference: [60, 100],
+      hip_circumference: [85, 130], neck_circumference: [30, 50],
+      upperarm_circumference: [25, 45], wrist_circumference: [14, 22],
+      garment_length: [40, 80], sleeve_length: [50, 70],
+      shoulder_length: [10, 20], shoulder_height: [10, 25],
+      neck_depth: [5, 25],
     };
-    
+
     Object.entries(MEASUREMENTS_MAPPING).forEach(([backendKey, componentKey]) => {
       const value = rawMeasurements[backendKey];
       const [min, max] = ranges[backendKey] || [0, 100];
       normalized[componentKey] = normalizeMeasurement(value, min, max);
     });
-    
-    console.log("📐 Normalized measurements for 3D:", normalized);
     return normalized;
   }, [rawMeasurements]);
 
@@ -89,14 +88,9 @@ export default function RenderTab({ projectId, bounds2D }) {
     loadAllData();
   }, [projectId, sleeveType]);
 
-
-  // 🔧 ИСПРАВЛЕНО: была loadCalculation, должна быть loadAllData
   const loadAllData = async () => {
-    setLoading(true);
-    setError(null);
-    
+    setLoading(true); setError(null);
     try {
-      // Загружаем всё параллельно
       const [type, calc, stamps, pats, meas] = await Promise.all([
         invoke("get_project_sleeve_type", { projectId }).catch(() => "raglan"),
         invoke("calculate_blueprint", { projectId, sleeveType }),
@@ -104,18 +98,10 @@ export default function RenderTab({ projectId, bounds2D }) {
         invoke("get_patterns_for_project", { projectId }).catch(() => []),
         invoke("get_project_blueprint_measurements", { projectId }).catch(() => null),
       ]);
-      
       setSleeveType(type);
       setCalculation(calc);
       setPatternStamps(stamps);
-      setPatterns(pats);
-      setRawMeasurements(adaptMeasurementsArray(meas)); // 👈 сохраняем сырые данные
-      console.log(stamps)
-      console.log("📦 RenderTab loaded:", { 
-        stamps: stamps?.length || 0, 
-        patterns: pats?.length || 0,
-        measurements: !!meas 
-      });
+      setRawMeasurements(adaptMeasurementsArray(meas));
     } catch (e) {
       console.error("Failed to load data:", e);
       setError("Не удалось загрузить данные для рендера");
@@ -124,91 +110,32 @@ export default function RenderTab({ projectId, bounds2D }) {
     }
   };
 
-  // Извлекаем yarn_color
-  const yarnColor = rawMeasurements?.yarn_color || 
-                    localStorage.getItem(`yarn_color_${projectId}`) || 
-                    "#c77d9e";
-
-  // 🔧 Обработчик обновления (исправленная ссылка)
-  const handleRefresh = () => {
-    loadAllData();
-  };
+  const yarnColor = rawMeasurements?.yarn_color || localStorage.getItem(`yarn_color_${projectId}`) || "#c77d9e";
 
   return (
     <div className="render-tab">
-      <div className="render-header">
-        <h2>🎨 3D Рендер изделия</h2>
-        <button
-          className="btn-secondary"
-          onClick={handleRefresh}  // 👈 ИСПРАВЛЕНО: была loadCalculation
-          disabled={loading}
-        >
-          {loading ? "⏳ Загрузка..." : "🔄 Обновить"}
-        </button>
-      </div>
+      <h2>🎨 3D Рендер изделия</h2>
 
-      {error && (
-        <div className="render-error">
-          <p>⚠️ {error}</p>
-          <button className="btn-secondary" onClick={() => setError(null)}>
-            Закрыть
-          </button>
-        </div>
-      )}
+      {error && <div className="render-error"><p>⚠️ {error}</p><button className="btn-secondary" onClick={() => setError(null)}>Закрыть</button></div>}
 
       {loading && !calculation ? (
-        <div className="render-loading">
-          <div className="spinner" />
-          <p>Загрузка 3D модели...</p>
-        </div>
+        <div className="render-loading"><div className="spinner" /><p>Загрузка 3D модели...</p></div>
       ) : (
         <div className="render-content">
           <div className="render-3d-wrapper">
             <Suspense fallback={<div className="render-loading">Загрузка 3D...</div>}>
               <Sweater3DPreview
-                // 👇 Передаём нормализованные мерки для морф-таргетов
                 initialMeasurements={measurements3D}
-                // Цвет пряжи
                 yarnColor={yarnColor}
                 scaleFactor={2}
                 offsetY={-70}
-                // Текстура (опционально, если есть путь)
-                textureUrl={ "/textures/knit_3d.jpg"}
-                
-                // Узоры (для PatternStampsLayer, если реализуешь)
+                textureUrl="/textures/knit_3d.jpg"
                 stamps={patternStamps}
-                bounds2D={bounds2D}
-                // Высота канваса
+                bounds2D={bounds2D} // 🔹 теперь всегда есть данные
                 height={500}
-                
-                // Авто-вращение
                 autoRotate={true}
               />
             </Suspense>
-          </div>
-
-          <div className="render-info">
-
-            {/* Инфо о расчёте */}
-            {calculation && (
-              <div className="render-calc-info">
-                <h4>📊 Параметры модели</h4>
-                {calculation.type === "raglan" ? (
-                  <>
-                    <p>Тип: <strong>Реглан</strong></p>
-                    <p>Ширина спинки: {calculation.back_width_stitches} п.</p>
-                    <p>Высота: {calculation.total_rows} р.</p>
-                    <p>Убавок: {calculation.total_decreases} п.</p>
-                  </>
-                ) : (
-                  <>
-                    <p>Тип: <strong>Втачной рукав</strong></p>
-                    <p>Ширина низа: {calculation.hem_width_stitches} п.</p>
-                    <p>Высота: {calculation.total_garment_rows} р.</p>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}

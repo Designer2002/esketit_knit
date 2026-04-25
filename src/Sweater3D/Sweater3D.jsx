@@ -1,365 +1,299 @@
-import { useRef, useState, useEffect, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
+import { useRef, useState, useEffect, useMemo, useLayoutEffect } from "react";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
   Environment,
   ContactShadows,
   useGLTF,
+  Decal,
 } from "@react-three/drei";
 import * as THREE from "three";
-import { Decal } from "@react-three/drei";
-import c from "croppie";
 
-// ===== 🧶 Генерация canvas из pattern_data =====
-function buildCanvasFromPattern(patternData, cellSize = 8) {
+// ===== 🧶 Генерация текстуры из pattern_data =====
+function buildCanvasFromPattern(patternData, yarnColor) {
   const rows = (patternData || "").split("\n").filter((r) => r.trim());
+  if (rows.length === 0) return null;
 
   const height = rows.length;
-  const width = Math.max(...rows.map((r) => r.length));
+  const width = Math.max(...rows.map((r) => r.length || 0), 1);
 
   const canvas = document.createElement("canvas");
-  canvas.width = width * cellSize;
-  canvas.height = height * cellSize;
+  const CELL = 4; // размер одной "клетки" в пикселях
+  canvas.width = width * CELL;
+  canvas.height = height * CELL;
 
   const ctx = canvas.getContext("2d");
-
-  // фон прозрачный
+  
+  // 🔹 Прозрачный фон (ничего не рисуем)
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  ctx.fillStyle = "#000"; // цвет узора
-
-  rows.forEach((row, y) => {
+  
+  // 🔹 Рисуем ТОЛЬКО "1" цветом пряжи
+  ctx.fillStyle = yarnColor;
+  console.log(ctx.fillStyle)
+   rows.forEach((row, y) => {
     [...row].forEach((char, x) => {
       if (char === "1") {
-        // 👈 рисуем только если "1"
-        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
       }
+      // если "0" или пробел — не рисуем ничего (прозрачно)
     });
   });
 
   return canvas;
 }
 
-// ===== 📐 2D → 3D =====
-function mapTo3D(stamp, bounds2D, mesh) {
-  const { position_x: px, position_y: py, part_code } = stamp;
-
-  const bounds = bounds2D[part_code];
-  if (!bounds) return null;
-
-  const { minX, maxX, minY, maxY } = bounds;
-
-  const nx = (px - minX) / (maxX - minX);
-  const ny = (py - minY) / (maxY - minY);
-
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = box.getSize(new THREE.Vector3());
-  const min = box.min;
-
-  let x = min.x + nx * size.x;
-  let y = min.y + ny * size.y;
-  let z = 3;
-  let rotation = [0, 0, 0];
-
-  const depthOffset = 2;
-
-  switch (part_code) {
-    case "front":
-      z = min.z + size.z / 2 + depthOffset;
-      break;
-
-    case "back":
-      z = min.z - size.z / 2 - depthOffset;
-      rotation = [0, Math.PI, 0];
-      break;
-
-    case "sleeve_left":
-      x = min.x - size.x / 2 - depthOffset;
-      rotation = [0, Math.PI / 2, 0];
-      break;
-
-    case "sleeve_right":
-      x = min.x + size.x / 2 + depthOffset;
-      rotation = [0, -Math.PI / 2, 0];
-      break;
-
-    default:
-      return null;
-  }
-
-  return { position: [x, y, z], rotation };
-}
-
-// ===== 🎨 Один decal =====
-function PatternDecalItem({ stamp, bounds2D, garmentMesh }) {
-  const decalRef = useRef();
-  const parentMeshRef = useRef(null);
-
-  // Находим родительский меш при монтировании
-  useEffect(() => {
-    if (decalRef.current) {
-      let parent = decalRef.current.parent;
-      while (parent) {
-        if (parent.isMesh) {
-          parentMeshRef.current = parent;
-          break;
-        }
-        parent = parent.parent;
-      }
-    }
-  }, []);
-  if (!bounds2D?.[stamp.part_code] || !stamp.pattern_data) {
-    console.warn(
-      "⚠️ No bounds or pattern data for part_code:",
-      stamp.part_code,
-    );
-    return null;
-  }
-  const canvas = useMemo(
-    () => buildCanvasFromPattern(stamp.pattern_data),
-    [stamp.pattern_data],
-  );
+// ===== 🎨 Компонент декали =====
+function SafeDecal({ stamp, bounds2D, bounds3D, yarnColor }) {
+  const decalKey = `${stamp?.id}-${stamp?.pattern_data}-${stamp?.position_x}-${stamp?.position_y}`;
 
   const texture = useMemo(() => {
-    if (!canvas) {
-      console.log("NO CANVAS");
-      return null;
-    }
-
+    if (!stamp?.pattern_data) return null;
+    // ✅ ИСПРАВЛЕНИЕ: Передаем ПРАВИЛЬНЫЙ цвет (приоритет у custom_color, иначе yarnColor)
+    const color = stamp.custom_color || yarnColor || "#000000";
+    const canvas = buildCanvasFromPattern(stamp.pattern_data, color);
+    if (!canvas) return null;
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
     tex.needsUpdate = true;
-
     return tex;
-  }, [canvas]);
+  }, [stamp?.pattern_data, stamp?.width, stamp?.height, stamp.custom_color, yarnColor]);
 
-  const mapped = useMemo(
-    () => mapTo3D(stamp, bounds2D, garmentMesh),
-    [stamp, bounds2D, garmentMesh],
-  );
+  const { pos, rot, scale } = useMemo(() => {
+    if (!bounds3D || !stamp?.pattern_data) return { pos: null, rot: null, scale: null };
+    
+    const bounds = bounds2D?.[stamp.part_code];
+    if (!bounds || !isFinite(bounds.minX) || !isFinite(bounds.maxX)) {
+      return { pos: null, rot: null, scale: null };
+    }
 
-  if (!texture || !mapped) {
-    console.log("NO TEXTURE OR MAPPED");
-    return null;
-  }
-  console.log("📌 DecalItem:", { stamp, mapped });
-  const SCALE = 0.5;
+    const rangeX = bounds.maxX - bounds.minX || 1;
+    const rangeY = bounds.maxY - bounds.minY || 1;
+    
+    // 1. Нормализуем 2D позицию (получаем проценты от 0 до 1)
+    const nx = (stamp.position_x - bounds.minX) / rangeX;
+    const ny = (stamp.position_y - bounds.minY) / rangeY;
+    
+    if (!isFinite(nx) || !isFinite(ny)) return { pos: null, rot: null, scale: null };
+
+    // 2. Используем ЛОКАЛЬНЫЙ 3D размер (теперь это числа вроде -0.5 ... 0.5)
+    const size = bounds3D.getSize(new THREE.Vector3());
+    const min = bounds3D.min.clone();
+
+    // 3. Мапим проценты на локальный размер
+    const p = new THREE.Vector3(min.x + nx * size.x, min.y + ny * size.y, 0);
+
+    // 4. Математически вычисляем отступ (чтобы декаль не "влазила" внутрь meshes)
+    const offset = size.z * 0.01; // микро-отступ 
+
+    switch (stamp.part_code) {
+      case "front": p.z = min.z + size.z / 2 + offset; break;
+      case "back": p.z = min.z - size.z / 2 - offset; break;
+      case "sleeve_left": p.x = min.x - size.x / 2 - offset; break;
+      case "sleeve_right": p.x = min.x + size.x / 2 + offset; break;
+      default: return { pos: null, rot: null, scale: null };
+    }
+
+    const r = new THREE.Euler(0, 0, 0);
+    if (stamp.part_code === "back") r.y = Math.PI;
+    if (stamp.part_code === "sleeve_left") r.y = Math.PI / 2;
+    if (stamp.part_code === "sleeve_right") r.y = -Math.PI / 2;
+
+    // 5. Математический масштаб: 
+    // (Ширина узора в пикселях / Ширина всей выкройки) * Ширина 3D модели
+    const s = [
+      Math.max(0.01, (stamp.width / rangeX) * size.x), 
+      Math.max(0.01, (stamp.height / rangeY) * size.y), 
+      1
+    ];
+
+    return { pos: p, rot: r, scale: s };
+  }, [bounds3D, bounds2D, stamp]);
+
+  if (!pos || !rot || !scale || !texture) return null;
+  
   return (
     <Decal
-      ref={decalRef}
-      position={mapped.position}
-      rotation={mapped.rotation}
-      scale={[stamp.width * SCALE, stamp.height * SCALE, 10]}
-    >
-      <meshStandardMaterial
-        map={texture}
-        transparent
-        polygonOffset
-        polygonOffsetFactor={-1}
-        depthWrite={false}
-      />
-    </Decal>
+      debug={true} 
+      key={decalKey}
+      position={pos.toArray()}
+      rotation={rot.toArray()}
+      scale={scale}
+      map={texture}
+      transparent
+      polygonOffset
+      polygonOffsetFactor={-1}
+      toneMapped={false}
+    />
   );
 }
 
-// ===== Хук для управления мерками =====
-function useMeasurements(initialValues = {}) {
-  const [values, setValues] = useState({
-    chest: 0, // обхват груди (0 = база, 1 = макс. увеличение)
-    waist: 0, // обхват талии
-    hips: 0, // обхват бедер
-    neck: 0, // обхват шеи
-    shoulderHeight: 0,
-    shoulderLength: 0,
-    armWidth: 0,
-    wrist: 0,
-    sleeveLength: 0,
-    bodyLength: 0,
-    neckDepth: 0, // глубина выреза
-    ...initialValues,
-  });
-
-  const update = (name, value) => {
-    setValues((prev) => ({
-      ...prev,
-      [name]: THREE.MathUtils.clamp(value, 0, 1),
-    }));
-  };
-
-  const reset = () => {
-    setValues((prev) => {
-      const cleared = { ...prev };
-      Object.keys(cleared).forEach((k) => (cleared[k] = 0));
-      return cleared;
-    });
-  };
-
-  return { values, update, reset };
-}
-
-// ===== Компонент одежды с морф-таргетами =====
+// ===== 👕 Модель одежды =====
 function GarmentModel({
   measurements,
   textureUrl,
   accentColor,
   offsetY = 0,
-  onMeshReady,
   scaleFactor = 1,
+  stamps = [],
+  bounds2D = {},
+  yarnColor,
 }) {
   const { scene } = useGLTF("/models/garment_t.glb");
-  const meshRef = useRef();
-  const morphRefs = useRef({}); // кэш для morphTargetDictionary
+  const [meshData, setMeshData] = useState(null);
+  const [originalTransform, setOriginalTransform] = useState({ position: [0,0,0], rotation: [0,0,0], scale: [1,1,1] });
+  const [centeringTransform, setCenteringTransform] = useState({ position: [0,0,0], scale: [1,1,1] });
+  
+  const meshBoxRef = useRef(null);
+  const morphData = useRef({ dict: null, influences: null });
 
-  // 🔍 Инициализация: находим меш с морф-таргетами
+  // 🔍 Извлекаем данные и восстанавливаем оригинальную трансформацию
   useEffect(() => {
     if (!scene) return;
-
-    let targetMesh = null;
-
+    let found = null;
     scene.traverse((child) => {
-      //console.log(child)
       if (child.isMesh && child.morphTargetInfluences?.length) {
-        targetMesh = child;
+        found = child;
       }
     });
+    if (found) {
+      // 1. Принудительно обновляем мировую матрицу сцены
+      scene.updateMatrixWorld(true);
 
-    if (!targetMesh) {
-      console.warn("⚠️ Не найден меш с морф-таргетами в /models/garment_t.glb");
-      return;
+      // 2. Извлекаем мировую позицию, поворот и масштаб оригинального меша
+      const pos = new THREE.Vector3();
+      const quat = new THREE.Quaternion();
+      const scl = new THREE.Vector3();
+      found.matrixWorld.decompose(pos, quat, scl);
+
+      setOriginalTransform({
+        position: pos.toArray(),
+        rotation: new THREE.Euler().setFromQuaternion(quat).toArray(),
+        scale: scl.toArray(),
+      });
+
+      // 3. Считаем реальный размер ТОЛЬКО этого меша
+      const box = new THREE.Box3().setFromObject(found);
+      meshBoxRef.current = box; // Сохраняем для передачи в SafeDecal
+
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+
+      // 4. Вычисляем масштаб чтобы модель стала высотой 130 единиц
+      const sc = (130 / size.y) * scaleFactor;
+      setCenteringTransform({
+        position: [-center.x, -box.min.y - 40 + offsetY, -center.z],
+        scale: [sc, sc, sc]
+      });
+
+      morphData.current = {
+        dict: found.morphTargetDictionary,
+        influences: found.morphTargetInfluences,
+      };
+
+      setMeshData({
+        geometry: found.geometry,
+        material: found.material,
+      });
     }
+  }, [scene, offsetY, scaleFactor]);
 
-    // Сохраняем ссылки на морфы для быстрого доступа
-    morphRefs.current = {
-      mesh: targetMesh,
-      dict: targetMesh.morphTargetDictionary,
-      influences: targetMesh.morphTargetInfluences,
-    };
-
-    if (onMeshReady) onMeshReady(targetMesh);
-  }, [scene, onMeshReady]);
-
-  // 🔄 Применение морф-таргетов при изменении мерок
+  // 🔄 Применение морф-таргетов
   useEffect(() => {
-    const { mesh, dict, influences } = morphRefs.current;
-    if (!mesh || !dict || !influences) return;
+    const { dict, influences } = morphData.current;
+    if (!meshData || !dict || !influences) return;
 
-    // 🔄 Сбрасываем все влияния перед применением новых
-    for (let i = 0; i < influences.length; i++) {
-      influences[i] = 0;
-    }
+    for (let i = 0; i < influences.length; i++) influences[i] = 0;
 
-    // 🗺️ Маппинг: название мерки → ключ морф-таргета
     const mapping = {
-      chest: "chest_circumference_increase",
-      waist: "waist_increase",
-      hips: "hip_circumference_increase",
-      neck: "neck_circumference_decrease",
-      neckDepth: "neck_depth_increase",
-      shoulderHeight: "shoulder_height_increase",
-      shoulderLength: "shoulder_length_increase",
-      armWidth: "arm_circumference_decrease",
-      wrist: "wrist_circumference_decrease",
-      sleeveLength: "sleeve_length_decrease",
+      chest: "chest_circumference_increase", waist: "waist_increase",
+      hips: "hip_circumference_increase", neck: "neck_circumference_decrease",
+      neckDepth: "neck_depth_increase", shoulderHeight: "shoulder_height_increase",
+      shoulderLength: "shoulder_length_increase", armWidth: "arm_circumference_decrease",
+      wrist: "wrist_circumference_decrease", sleeveLength: "sleeve_length_decrease",
       bodyLength: "garment_length_increase",
     };
-
-    // 💡 Логика для пар "increase/decrease":
-    // Если у тебя есть и waist_increase, и waist_decrease:
-    // - при waist > 0.5 применяем increase с силой (waist - 0.5) * 2
-    // - при waist < 0.5 применяем decrease с силой (0.5 - waist) * 2
-    // Но если ключи независимые — просто мапь напрямую:
 
     Object.entries(measurements).forEach(([key, value]) => {
       const morphKey = mapping[key];
       if (morphKey && dict[morphKey] !== undefined) {
-        influences[dict[morphKey]] = value; // 0..1
+        influences[dict[morphKey]] = THREE.MathUtils.clamp(value, 0, 1);
       }
     });
 
-    // 👇 Триггерим обновление геометрии
-    mesh.geometry.attributes.position.needsUpdate = true;
-    mesh.geometry.computeVertexNormals();
-  }, [measurements]);
+    meshData.geometry.attributes.position.needsUpdate = true;
+    meshData.geometry.computeVertexNormals();
+  }, [measurements, meshData]);
 
-  // 🎨 Применение материала и текстуры
+  // 🎨 Текстура и материал
   useEffect(() => {
-    if (!scene) return;
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = box.getSize(new THREE.Vector3());
-    if (textureUrl) {
-      const textureLoader = new THREE.TextureLoader();
-      const texture = textureLoader.load(textureUrl);
+    if (!meshData?.material || !textureUrl) return;
+    const loader = new THREE.TextureLoader();
+    const tex = loader.load(textureUrl);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
 
-      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-
-      // Подбираем повтор текстуры
-      const scaledWidth = size.x;
-      const scaledHeight = size.y;
-      const patternSize = 10;
-      texture.repeat.set(scaledWidth / patternSize, scaledHeight / patternSize);
-
-      texture.colorSpace = THREE.SRGBColorSpace;
-
-      scene.traverse((child) => {
-        if (!child.isMesh) return;
-
-        child.castShadow = true;
-        child.receiveShadow = true;
-
-        child.material.map = texture;
-        child.material.color = new THREE.Color(accentColor);
-
-        child.material.needsUpdate = true;
-        child.geometry.computeVertexNormals();
-      });
+    if (meshBoxRef.current) {
+      const size = meshBoxRef.current.getSize(new THREE.Vector3());
+      tex.repeat.set(120, 120);
     }
-  }, [scene, textureUrl, accentColor]);
 
-  // 📐 Центрирование и масштабирование (один раз при загрузке)
-  useEffect(() => {
-    if (!scene) return;
+    meshData.material.map = tex;
+    meshData.material.color = new THREE.Color(accentColor);
+    meshData.material.needsUpdate = true;
+  }, [meshData, textureUrl, accentColor]);
 
-    // Сброс трансформаций
-    scene.position.set(0, 0, 0);
-    scene.rotation.set(0, 0, 0);
-    scene.scale.set(1, 1, 1);
+  if (!meshData) return null;
 
-    const box = new THREE.Box3().setFromObject(scene);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-
-    // Центрируем по горизонтали, ставим "на пол" по Y
-    scene.position.set(-center.x, -box.min.y - 40 + offsetY, -center.z);
-
-    // Масштабируем под целевую высоту
-    const targetHeight = 130;
-    const scale = (targetHeight / size.y) * scaleFactor; // scaleFactor для дополнительного увеличения
-    scene.scale.setScalar(scale);
-
-    // console.log("📦 Garment:", {
-    //   size: size.toArray(),
-    //   scale,
-    //   position: scene.position.toArray(),
-    // });
-  }, [scene]);
-
-  return <primitive ref={meshRef} object={scene} />;
-}
-
-// 🔁 Предзагрузка
-useGLTF.preload("/models/garment_t.glb");
-
-// ===== Утилита для CSS-переменных =====
-function getCSSVar(name, fallback = "#000000") {
-  if (typeof window === "undefined") return fallback;
   return (
-    getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
-    fallback
+    <group position={centeringTransform.position} scale={centeringTransform.scale}>
+      {/* 🔹 Восстанавливаем оригинальный меш с его "встроенным" масштабом из Blender */}
+      <mesh
+        geometry={meshData.geometry}
+        material={meshData.material}
+        position={originalTransform.position}
+        rotation={originalTransform.rotation}
+        scale={originalTransform.scale}
+        morphTargetDictionary={morphData.current.dict}
+        morphTargetInfluences={morphData.current.influences}
+        castShadow
+        receiveShadow
+      >
+        {stamps?.map((stamp) => (
+          <SafeDecal
+            key={stamp.id}
+            stamp={stamp}
+            bounds2D={bounds2D}
+            bounds3D={meshBoxRef.current}
+            yarnColor={stamp.custom_color} // <--- ДОБАВИТЬ ЭТО
+          />
+        ))}
+      </mesh>
+    </group>
   );
 }
 
-// ===== Основной компонент =====
+useGLTF.preload("/models/garment_t.glb");
+
+// ===== Утилиты =====
+function getCSSVar(name, fallback = "#1a1a2e") {
+  if (typeof window === "undefined") return fallback;
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function useMeasurements(initialValues = {}) {
+  const [values, setValues] = useState({
+    chest: 0, waist: 0, hips: 0, neck: 0, shoulderHeight: 0, shoulderLength: 0,
+    armWidth: 0, wrist: 0, sleeveLength: 0, bodyLength: 0, neckDepth: 0,
+    ...initialValues,
+  });
+  const update = (name, value) =>
+    setValues((prev) => ({ ...prev, [name]: THREE.MathUtils.clamp(value, 0, 1) }));
+  const reset = () =>
+    setValues((prev) => Object.keys(prev).reduce((acc, k) => ({ ...acc, [k]: 0 }), {}));
+  return { values, update, reset };
+}
+
+// ===== Экспортируемый компонент =====
 export function Sweater3DPreview({
   height = 600,
   autoRotate = true,
@@ -373,119 +307,51 @@ export function Sweater3DPreview({
   bounds2D = {},
   stamps = [],
 }) {
-  const fogColor = useMemo(
-    () => getCSSVar(fogColorVar, "#1a1a2e"),
-    [fogColorVar],
-  );
-  const accentColor = useMemo(
-    () => yarnColor || getCSSVar(accentColorVar, "#c77d9e"),
-    [accentColorVar, yarnColor],
-  );
-  console.log(bounds2D);
-  const {
-    values: measurements,
-    update: updateMeasurement,
-    reset: resetMeasurements,
-  } = useMeasurements(initialMeasurements);
-
-  const [garmentMesh, setGarmentMesh] = useState(null);
+  const fogColor = useMemo(() => getCSSVar(fogColorVar, "#1a1a2e"), [fogColorVar]);
+  const accentColor = useMemo(() => yarnColor || getCSSVar(accentColorVar, "#c77d9e"), [accentColorVar, yarnColor]);
+  const { values: measurements } = useMeasurements(initialMeasurements);
   const [isLoading, setIsLoading] = useState(true);
 
   return (
-    <div
-      style={{
-        height: `${height}px`,
-        position: "relative",
-        background: fogColor,
-      }}
-    >
+    <div style={{ height: `${height}px`, position: "relative", background: fogColor }}>
       {isLoading && (
-        <div
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            color: "white",
-            zIndex: 10,
-            background: "rgba(0,0,0,0.6)",
-            padding: "12px 24px",
-            borderRadius: 8,
-          }}
-        >
-          Загрузка...
+        <div style={{
+          position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+          color: "white", zIndex: 10, background: "rgba(0,0,0,0.6)", padding: "12px 24px", borderRadius: 8,
+        }}>
+          Загрузка 3D...
         </div>
       )}
-
       <Canvas
         camera={{ position: [0, 40, 180], fov: 40, near: 1, far: 2000 }}
         style={{ background: "transparent" }}
-        key={"fixed"}
         gl={{ antialias: true, alpha: true }}
         onCreated={() => setIsLoading(false)}
       >
         <fog attach="fog" args={[fogColor, 250, 800]} />
-
         <ambientLight intensity={0.5} />
-        <directionalLight
-          position={[120, 180, 120]}
-          intensity={1.3}
-          castShadow
-          shadow-mapSize={[1024, 1024]}
-        />
+        <directionalLight position={[120, 180, 120]} intensity={1.3} castShadow shadow-mapSize={[1024, 1024]} />
         <directionalLight position={[-120, 80, -20]} intensity={0.6} />
-        <pointLight
-          position={[0, 100, 150]}
-          intensity={0.9}
-          color={accentColor}
+        <pointLight position={[0, 100, 150]} intensity={0.9} color={accentColor} />
+
+        <GarmentModel
+          measurements={measurements}
+          textureUrl={textureUrl}
+          accentColor={accentColor}
+          scaleFactor={scaleFactor}
+          offsetY={offsetY}
+          stamps={stamps}
+          bounds2D={bounds2D}
+          yarnColor={yarnColor}
         />
 
-        <group>
-          {/* 🧶 Только одежда — человек убран */}
-          <GarmentModel
-            measurements={measurements}
-            textureUrl={textureUrl}
-            accentColor={accentColor}
-            onMeshReady={setGarmentMesh}
-            scaleFactor={scaleFactor}
-            offsetY={offsetY}
-          />
-          ```
-          {garmentMesh &&
-            bounds2D &&
-            stamps?.length > 0 &&
-            stamps
-              .filter((stamp) => bounds2D[stamp.part_code])
-              .map((stamp) => (
-                <PatternDecalItem
-                  key={stamp.id}
-                  stamp={stamp}
-                  bounds2D={bounds2D}
-                  garmentMesh={garmentMesh}
-                />
-              ))}
-        </group>
-
-        <ContactShadows
-          position={[0, -90, 0]}
-          opacity={0.35}
-          scale={300}
-          blur={2.5}
-          color={fogColor}
-        />
+        <ContactShadows position={[0, -90, 0]} opacity={0.35} scale={300} blur={2.5} color={fogColor} />
         <Environment preset="studio" />
-
         <OrbitControls
-          enablePan={false}
-          minDistance={100}
-          maxDistance={400}
-          autoRotate={autoRotate}
-          autoRotateSpeed={0.4}
-          enableDamping
-          dampingFactor={0.06}
-          target={[0, 30, 0]}
-          minPolarAngle={Math.PI / 4}
-          maxPolarAngle={Math.PI / 2.1}
+          enablePan={false} minDistance={100} maxDistance={400}
+          autoRotate={autoRotate} autoRotateSpeed={0.4}
+          enableDamping dampingFactor={0.06}
+          target={[0, 30, 0]} minPolarAngle={Math.PI / 4} maxPolarAngle={Math.PI / 2.1}
           makeDefault
         />
       </Canvas>
