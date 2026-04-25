@@ -30,8 +30,7 @@ function buildCanvasFromPattern(patternData, cellSize = 8) {
 
   rows.forEach((row, y) => {
     [...row].forEach((char, x) => {
-      if (char === "1") {
-        // 👈 рисуем только если "1"
+      if (char !== " ") {
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     });
@@ -58,7 +57,7 @@ function mapTo3D(stamp, bounds2D, mesh) {
 
   let x = min.x + nx * size.x;
   let y = min.y + ny * size.y;
-  let z = 3;
+  let z = 0;
   let rotation = [0, 0, 0];
 
   const depthOffset = 2;
@@ -91,16 +90,9 @@ function mapTo3D(stamp, bounds2D, mesh) {
 }
 
 // ===== 🎨 Один decal =====
-function PatternDecalItem({ garmentMesh, stamp, bounds2D }) {
-  if (!garmentMesh || !garmentMesh.isMesh) {
-    console.warn("⚠️ PatternDecalItem: mesh is not ready or invalid");
-    return null;
-  }
+function PatternDecalItem({ mesh, stamp, bounds2D }) {
   if (!bounds2D?.[stamp.part_code] || !stamp.pattern_data) {
-    console.warn(
-      "⚠️ No bounds or pattern data for part_code:",
-      stamp.part_code,
-    );
+    console.warn("⚠️ No bounds or pattern data for part_code:", stamp.part_code);
     return null;
   }
   const canvas = useMemo(
@@ -109,10 +101,7 @@ function PatternDecalItem({ garmentMesh, stamp, bounds2D }) {
   );
 
   const texture = useMemo(() => {
-    if (!canvas) {
-      console.log("NO CANVAS");
-      return null;
-    }
+    if (!canvas) {console.log("NO CANVAS"); return null; } 
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -123,23 +112,19 @@ function PatternDecalItem({ garmentMesh, stamp, bounds2D }) {
   }, [canvas]);
 
   const mapped = useMemo(
-    () => mapTo3D(stamp, bounds2D, garmentMesh),
-    [stamp, bounds2D, garmentMesh],
+    () => mapTo3D(stamp, bounds2D, mesh),
+    [stamp, bounds2D, mesh],
   );
 
-  if (!texture || !mapped) {
-    console.log("NO TEXTURE OR MAPPED");
-    return null;
-  }
+  if (!texture || !mapped) {console.log("NO TEXTURE OR MAPPED"); return null; }
   console.log("📌 DecalItem:", { stamp, mapped });
-  const SCALE = 0.5;
 
   return (
     <Decal
-      mesh={garmentMesh}
+      mesh={mesh}
       position={mapped.position}
       rotation={mapped.rotation}
-      scale={[stamp.width * SCALE, stamp.height * SCALE, 10]}
+      scale={[stamp.width, stamp.height, 10]}
     >
       <meshStandardMaterial
         map={texture}
@@ -370,7 +355,7 @@ export function Sweater3DPreview({
     () => yarnColor || getCSSVar(accentColorVar, "#c77d9e"),
     [accentColorVar, yarnColor],
   );
-  console.log(bounds2D);
+ console.log(bounds2D)
   const {
     values: measurements,
     update: updateMeasurement,
@@ -409,7 +394,6 @@ export function Sweater3DPreview({
       <Canvas
         camera={{ position: [0, 40, 180], fov: 40, near: 1, far: 2000 }}
         style={{ background: "transparent" }}
-        key={"fixed"}
         gl={{ antialias: true, alpha: true }}
         onCreated={() => setIsLoading(false)}
       >
@@ -442,13 +426,12 @@ export function Sweater3DPreview({
         {garmentMesh && bounds2D && stamps?.length > 0 && (
           <group>
             {stamps
-              .filter((stamp) => bounds2D[stamp.part_code])
+              .filter((stamp) => bounds2D[stamp.part_code]) // 👇 только если есть границы
               .map((stamp) => (
                 <PatternDecalItem
                   key={stamp.id}
                   stamp={stamp}
                   bounds2D={bounds2D}
-                  garmentMesh={garmentMesh}
                 />
               ))}
           </group>

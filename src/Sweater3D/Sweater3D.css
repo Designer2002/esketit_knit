@@ -1,5 +1,5 @@
 .sweater-3d-container {
-  width: 100%;
+  width: 500px;
   height: 100%;
   border-radius: 16px;
   overflow: hidden;
@@ -10,4 +10,5 @@
 .sweater-3d-container canvas {
   border-radius: 16px;
   outline: none;
+  background: transparent;
 }

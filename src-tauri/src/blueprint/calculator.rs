@@ -1,10 +1,13 @@
+use std::vec;
+
 // crate::calculator.rs
 use super::parts::{build_decrease_pts, build_neck_pts, build_shoulder_pts};
 use super::sleeves::*;
 use super::traits::*;
 use crate::blueprint::{
-    BlueprintCalculation, BlueprintCoord, BlueprintNodePosition, DecreaseGroup, DecreaseStep,
-    ProjectMeasurements, RaglanCalculation, SetInSleeveCalculation, SleeveDimensions,
+    BlueprintCalculation, BlueprintCoord, BlueprintNodePosition, BlueprintWithSeams, DecreaseGroup,
+    DecreaseStep, NodeId, NodeKind, PartCode, ProjectMeasurements, RaglanCalculation,
+    SeamConnection, SetInSleeveCalculation, SleeveDimensions,
 };
 use sqlx::{Row, SqlitePool};
 
@@ -52,10 +55,12 @@ impl BlueprintCalculator {
         let hem_stitches = (half_chest * p).round() as i32;
         let garment_length = (m.di * r).round() as i32;
 
-        let raglan_line = (half_chest / 3.0) + 7.0;
-        let raglan_rows = (raglan_line * r).round() as i32;
-        let armhole_row = garment_length - raglan_rows;
-
+        let raglan_line_back = (half_chest / 3.0) + 7.0;
+        let raglan_line_front = raglan_line_back + 2.0;
+        let raglan_rows_back = (raglan_line_back * r).round() as i32;
+        let raglan_rows_front = (raglan_line_front * r).round() as i32;
+        let armhole_row_back = garment_length - raglan_rows_back;
+        let armhole_row_front = garment_length - raglan_rows_front;
         let mut shoulder_cuts = 2.0;
         if m.og > 100.0 && m.og <= 120.0 {
             shoulder_cuts += 0.5;
@@ -69,13 +74,13 @@ impl BlueprintCalculator {
         let neck_front = m.oh / 3.0;
         let neck_back_st = (neck_back * p).round() as i32;
         let neck_front_st = (neck_front * p).round() as i32;
-
+        //let hem_rows = (m.og / 2.0 * r).floor() as i32;
         let dec_back = ((hem_stitches - dec_shoulder * 2) - neck_back_st) / 2;
         let dec_front = ((hem_stitches - dec_shoulder * 2) - neck_front_st) / 2;
         let (back_rows, back_counts) =
-            gen_raglan_decreases(armhole_row + 2, garment_length - 2, dec_back, r);
+            gen_raglan_decreases(armhole_row_back + 2, garment_length - 2, dec_back, r);
         let (front_rows, front_counts) =
-            gen_raglan_decreases(armhole_row + 2, garment_length - 2, dec_front, r);
+            gen_raglan_decreases(armhole_row_front + 2, garment_length - 2, dec_front, r);
 
         let neck_depth = (m.glg * r).round() as i32;
         let (neck_rows, neck_counts) = gen_u_neckline_decreases(neck_front_st, neck_depth);
@@ -102,61 +107,83 @@ impl BlueprintCalculator {
 
         let bcx = (viewbox_w * 3 / 4) as f64;
         let half_w = hem_stitches as f64 / 2.0;
-        let underarm_y = hem_y - (garment_length - armhole_row) as f64;
+        let underarm_y_back = hem_y - (garment_length - armhole_row_back) as f64;
+        let underarm_y_front = hem_y - (garment_length - armhole_row_front) as f64;
         let left_hem_x = bcx - half_w;
         let right_hem_x = bcx + half_w;
         let left_underarm_x = left_hem_x + dec_shoulder as f64;
         let right_underarm_x = right_hem_x - dec_shoulder as f64;
-        let shoulder_y = underarm_y;
 
+        let decrease_shoulders_back_rows = garment_length as f64 - raglan_rows_back as f64;
+        let decrease_shoulders_front_rows = garment_length as f64 - raglan_rows_front as f64;
+        // 🔽 BACK decreases - fix the first interval to be RELATIVE to start
         let back_shoulder_decreases: Vec<DecreaseGroup> = back_rows
             .iter()
             .zip(&back_counts)
-            .map(|(&row, &count)| DecreaseGroup {
-                stitches: count,
-                every_n_rows: if row > 0 { 2 } else { 1 },
-                repeat_count: 1,
-            })
-            .collect();
-        let front_shoulder_decreases: Vec<DecreaseGroup> = front_rows
-            .iter()
-            .zip(&front_counts)
-            .map(|(&row, &count)| DecreaseGroup {
-                stitches: count,
-                every_n_rows: if row > 0 { 2 } else { 1 },
-                repeat_count: 1,
+            .enumerate()
+            .map(|(i, (&row, &count))| {
+                let interval = if i == 0 {
+                    // ❌ OLD: row  (absolute row number - WRONG!)
+                    // ✅ NEW: relative offset from raglan start
+                    row - armhole_row_back // or: row - decrease_shoulders_back_rows.floor() as i32
+                } else {
+                    row - back_rows[i - 1]
+                };
+                DecreaseGroup {
+                    stitches: count,
+                    every_n_rows: interval.max(1),
+                    repeat_count: 1,
+                }
             })
             .collect();
 
-        let shoulder_pts_left = build_shoulder_pts(
+        // 🔽 FRONT decreases - SAME FIX
+        let front_shoulder_decreases: Vec<DecreaseGroup> = front_rows
+            .iter()
+            .zip(&front_counts)
+            .enumerate()
+            .map(|(i, (&row, &count))| {
+                let interval = if i == 0 {
+                    row - armhole_row_front // ✅ Relative to front raglan start
+                } else {
+                    row - front_rows[i - 1]
+                };
+                DecreaseGroup {
+                    stitches: count,
+                    every_n_rows: interval.max(1),
+                    repeat_count: 1,
+                }
+            })
+            .collect();
+        let shoulder_pts_left_back = build_shoulder_pts(
             left_underarm_x,
-            shoulder_y,
+            decrease_shoulders_back_rows,
             &back_shoulder_decreases,
             sx,
             sy,
             true,
         );
-        let shoulder_pts_right = build_shoulder_pts(
+        let shoulder_pts_right_back = build_shoulder_pts(
             right_underarm_x,
-            shoulder_y,
+            decrease_shoulders_back_rows,
             &back_shoulder_decreases,
             sx,
             sy,
             false,
         );
 
-        let neck_start_left = shoulder_pts_left
+        let neck_start_left_back = shoulder_pts_left_back
             .last()
             .copied()
-            .unwrap_or((left_underarm_x, shoulder_y));
-        let neck_start_right = shoulder_pts_right
+            .unwrap_or((left_underarm_x, decrease_shoulders_back_rows));
+        let neck_start_right_back = shoulder_pts_right_back
             .last()
             .copied()
-            .unwrap_or((right_underarm_x, shoulder_y));
+            .unwrap_or((right_underarm_x, decrease_shoulders_back_rows));
 
         let neck_pts_left = build_neck_pts(
-            neck_start_left.0,
-            neck_start_left.1,
+            neck_start_left_back.0,
+            neck_start_left_back.1,
             &neck_decreases_rows_back,
             0,
             sx,
@@ -164,8 +191,8 @@ impl BlueprintCalculator {
             false,
         );
         let neck_pts_right = build_neck_pts(
-            neck_start_right.0,
-            neck_start_right.1,
+            neck_start_right_back.0,
+            neck_start_right_back.1,
             &neck_decreases_rows_back,
             0,
             sx,
@@ -173,33 +200,27 @@ impl BlueprintCalculator {
             true,
         );
 
-        let front_neck_y = neck_start_right.1;
-        let front_neck_x_left = neck_pts_left.first().unwrap().0;
-        let front_neck_x_right = neck_pts_right.first().unwrap().0;
+        let back_neck_y = neck_start_right_back.1;
+        let back_neck_x_left = neck_pts_left.first().unwrap().0;
+        let back_neck_x_right = neck_pts_right.first().unwrap().0;
 
         nodes.extend([
-            bp("back_neck_left", front_neck_x_left, front_neck_y, "back"),
-            bp("back_neck_right", front_neck_x_right, front_neck_y, "back"),
-            bp("back_left_hem", left_hem_x, hem_y, "back"),
-            bp("back_right_hem", right_hem_x, hem_y, "back"),
-            bp("back_left_cut", left_hem_x, underarm_y, "back"),
-            bp("back_right_cut", right_hem_x, underarm_y, "back"),
-            bp("back_left_underarm", left_underarm_x, underarm_y, "back"),
-            bp("back_right_underarm", right_underarm_x, underarm_y, "back"),
+            bp("left_hem", left_hem_x, hem_y, "back"),
+            bp("left_cut", left_hem_x, underarm_y_back, "back"),
+            bp("left_underarm", left_underarm_x, underarm_y_back, "back"),
+            bp("neck_left", back_neck_x_left, back_neck_y, "back"),
+            bp("neck_right", back_neck_x_right, back_neck_y, "back"),
+            bp("right_underarm", right_underarm_x, underarm_y_back, "back"),
+            bp("right_cut", right_hem_x, underarm_y_back, "back"),
+            bp("right_hem", right_hem_x, hem_y, "back"),
         ]);
 
-        for (x, y) in &shoulder_pts_left {
-            nodes.push(bp(&format!("back_left_shoulder_{:.0}", y), *x, *y, "back"));
-        }
-        for (x, y) in &shoulder_pts_right {
-            nodes.push(bp(&format!("back_right_shoulder_{:.0}", y), *x, *y, "back"));
-        }
-        for (x, y) in &neck_pts_left {
-            nodes.push(bp(&format!("back_left_neck_{:.0}", y), *x, *y, "back"));
-        }
-        for (x, y) in &neck_pts_right {
-            nodes.push(bp(&format!("back_right_neck_{:.0}", y), *x, *y, "back"));
-        }
+        // for (x, y) in &shoulder_pts_left_back {
+        //     nodes.push(bp(&format!("back_left_shoulder_{:.0}", y), *x, *y, "back"));
+        // }
+        // for (x, y) in &shoulder_pts_right_back {
+        //     nodes.push(bp(&format!("back_right_shoulder_{:.0}", y), *x, *y, "back"));
+        // }
 
         let fcx = (viewbox_w / 4) as f64;
         let front_left_hem_x = fcx - half_w;
@@ -207,31 +228,32 @@ impl BlueprintCalculator {
         let front_left_underarm_x = front_left_hem_x + dec_shoulder as f64;
         let front_right_underarm_x = front_right_hem_x - dec_shoulder as f64;
 
-        let front_shoulder_pts_left = build_shoulder_pts(
-            front_left_underarm_x,
-            underarm_y,
-            &front_shoulder_decreases,
+        // ✅ CORRECT — use FRONT variables:
+        let shoulder_pts_left_front = build_shoulder_pts(
+            front_left_underarm_x,         // ✅ Front's x
+            decrease_shoulders_front_rows, // ✅ Front's start row
+            &front_shoulder_decreases,     // ✅ Front's decreases
             sx,
             sy,
             true,
         );
-        let front_shoulder_pts_right = build_shoulder_pts(
-            front_right_underarm_x,
-            underarm_y,
-            &front_shoulder_decreases,
+        let shoulder_pts_right_front = build_shoulder_pts(
+            front_right_underarm_x,        // ✅ Front's x
+            decrease_shoulders_front_rows, // ✅ Front's start row
+            &front_shoulder_decreases,     // ✅ Front's decreases
             sx,
             sy,
             false,
         );
 
-        let front_neck_start_left = front_shoulder_pts_left
+        let front_neck_start_left = shoulder_pts_left_front
             .last()
             .copied()
-            .unwrap_or((front_left_underarm_x, underarm_y));
-        let front_neck_start_right = front_shoulder_pts_right
+            .unwrap_or((front_left_underarm_x, decrease_shoulders_front_rows));
+        let front_neck_start_right = shoulder_pts_right_front
             .last()
             .copied()
-            .unwrap_or((front_right_underarm_x, underarm_y));
+            .unwrap_or((front_right_underarm_x, decrease_shoulders_front_rows));
 
         let front_neck_pts_left = build_neck_pts(
             front_neck_start_left.0,
@@ -257,77 +279,61 @@ impl BlueprintCalculator {
         let front_neck_x_right = front_neck_pts_right.first().unwrap().0;
 
         nodes.extend([
-            bp("front_left_hem", front_left_hem_x, hem_y, "front"),
-            bp("front_right_hem", front_right_hem_x, hem_y, "front"),
-            bp("front_left_cut", front_left_hem_x, underarm_y, "front"),
-            bp("front_right_cut", front_right_hem_x, underarm_y, "front"),
+            bp("left_hem", front_left_hem_x, hem_y, "front"),
+            bp("left_cut", front_left_hem_x, underarm_y_front, "front"),
             bp(
-                "front_left_underarm",
+                "left_underarm",
                 front_left_underarm_x,
-                underarm_y,
-                "front",
-            ),
-            bp(
-                "front_right_underarm",
-                front_right_underarm_x,
-                underarm_y,
+                underarm_y_front,
                 "front",
             ),
         ]);
 
-        for (x, y) in &front_shoulder_pts_left {
-            nodes.push(bp(
-                &format!("front_left_shoulder_{:.0}", y),
-                *x,
-                *y,
-                "front",
-            ));
+        for (x, y) in &shoulder_pts_left_front {
+            nodes.push(bp(&format!("left_shoulder_{:.0}", y), *x, *y, "front"));
         }
-        for (x, y) in &front_shoulder_pts_right {
-            nodes.push(bp(
-                &format!("front_right_shoulder_{:.0}", y),
-                *x,
-                *y,
-                "front",
-            ));
-        }
-        nodes.extend([
-            bp("front_neck_left", front_neck_x_left, front_neck_y, "front"),
-            bp(
-                "front_neck_right",
-                front_neck_x_right,
-                front_neck_y,
-                "front",
-            ),
-        ]);
+
+        nodes.extend([bp("neck_left", front_neck_x_left, front_neck_y, "front")]);
         for (x, y) in &front_neck_pts_left {
-            nodes.push(bp(&format!("front_left_neck_{:.0}", y), *x, *y, "front"));
+            nodes.push(bp(&format!("left_neck_{:.0}", y), *x, *y, "front"));
         }
-        for (x, y) in &front_neck_pts_right {
-            nodes.push(bp(&format!("front_right_neck_{:.0}", y), *x, *y, "front"));
-        }
-
-        let front_shoulder_y = front_shoulder_pts_left
-            .last()
-            .map(|p| p.1)
-            .unwrap_or(front_neck_y);
         nodes.push(bp(
-            "front_neck_center",
+            "neck_center",
             fcx,
-            front_shoulder_y + neck_depth as f64,
+            front_neck_y + neck_depth as f64,
             "front",
         ));
-        let back_shoulder_y = shoulder_pts_left
+        for (x, y) in front_neck_pts_right.iter().rev() {
+            nodes.push(bp(&format!("right_neck_{:.0}", y), *x, *y, "front"));
+        }
+        nodes.push(bp("neck_right", front_neck_x_right, front_neck_y, "front"));
+
+        let back_shoulder_y = shoulder_pts_left_back
             .last()
             .map(|p| p.1)
             .unwrap_or(front_neck_y);
         nodes.push(bp(
-            "back_neck_center",
+            "neck_center",
             bcx,
             back_shoulder_y + (neck_depth as f64 * 0.25),
             "back",
         ));
-
+        for (x, y) in &shoulder_pts_right_front {
+            nodes.push(bp(&format!("right_shoulder_{:.0}", y), *x, *y, "front"));
+        }
+        nodes.push(bp(
+            "right_underarm",
+            front_right_underarm_x,
+            underarm_y_front,
+            "front",
+        ));
+        nodes.push(bp(
+            "right_cut",
+            front_right_hem_x,
+            underarm_y_front,
+            "front",
+        ));
+        nodes.push(bp("right_hem", front_right_hem_x, hem_y, "front"));
         let sleeve_cx = (viewbox_w / 2) as f64;
         let sleeve_raglan_back = gen_sleeve_raglan_rows(&dims, false);
         let sleeve_raglan_front = gen_sleeve_raglan_rows(&dims, true);
@@ -340,8 +346,8 @@ impl BlueprintCalculator {
             sleeve_top_stitches: dims.top_stitches(),
             sleeve_cuff_stitches: dims.cuff_stitches(),
             total_rows: garment_length,
-            raglan_start_row_front: armhole_row,
-            raglan_start_row_back: armhole_row,
+            raglan_start_row_front: decrease_shoulders_front_rows.floor() as i32,
+            raglan_start_row_back: decrease_shoulders_back_rows.floor() as i32,
             raglan_end_row: garment_length - 2,
             sleeve_height_rows: dims.height_rows(),
             sleeve_increase_rows: dims.increase_rows().clone(),
@@ -365,8 +371,10 @@ impl BlueprintCalculator {
             sleeve_raglan_rows_back: sleeve_raglan_back.clone(),
             sleeve_raglan_rows_front: sleeve_raglan_front.clone(),
             neck_rem: rem,
-            blueprint_stitch_data: vec![],
-            blueprint_row_data: vec![],
+            blueprint_coords: BlueprintWithSeams {
+                coords: vec![],
+                seams: vec![],
+            },
         };
 
         nodes.extend(
@@ -377,14 +385,14 @@ impl BlueprintCalculator {
             self.sleeve
                 .generate_right_nodes(m, &raglan_calc, &dims, sleeve_cx),
         );
-        let (stitch_data, row_data) =
-            calculate_stitch_row_data_for_3d_preview(&nodes, viewbox_h, r, p);
+        let blueprint_coords = nodes_to_stitch_row_points(&nodes, viewbox_h, r, p);
+        //println!("STITCHES: {:?}, ROWS: {:?}", stitch_data, row_data);
+        //println!("{:?}", blueprint_coords);
         Ok(BlueprintCalculation::Raglan(RaglanCalculation {
             nodes,
             sleeve_raglan_rows_back: sleeve_raglan_back,
             sleeve_raglan_rows_front: sleeve_raglan_front,
-            blueprint_row_data: row_data,
-            blueprint_stitch_data: stitch_data,
+            blueprint_coords: blueprint_coords,
             ..raglan_calc
         }))
     }
@@ -692,8 +700,10 @@ impl BlueprintCalculator {
             waist_start_row: hip_len_rows,
             waist_end_row: back_len_rows,
             waist_point_row: (m.back_len / 2.0 * r).round() as i32,
-            blueprint_row_data: vec![],
-            blueprint_stitch_data: vec![],
+            blueprint_coords: BlueprintWithSeams {
+                coords: vec![],
+                seams: (vec![]),
+            },
         };
 
         nodes.extend(
@@ -704,103 +714,174 @@ impl BlueprintCalculator {
             self.sleeve
                 .generate_right_nodes(m, &setin_calc, &dims, sleeve_cx),
         );
-        let (stitch_data, row_data) =
-            calculate_stitch_row_data_for_3d_preview(&nodes, viewbox_h, r, p);
+        let blueprint_coords = nodes_to_stitch_row_points(&nodes, viewbox_h, r, p);
 
         Ok(BlueprintCalculation::SetIn(SetInSleeveCalculation {
             nodes,
-            blueprint_row_data: row_data,
-            blueprint_stitch_data: stitch_data,
+            blueprint_coords,
             ..setin_calc
         }))
     }
 }
 
 // ===== Helpers =====
+fn parse_node_id(s: &str) -> NodeId {
+    let parts: Vec<&str> = s.split('.').collect();
 
-fn calculate_stitch_row_data_for_3d_preview(
+    let part = match parts[0] {
+        "front" => PartCode::Front,
+        "back" => PartCode::Back,
+        "sleeve_left" => PartCode::SleeveLeft,
+        "sleeve_right" => PartCode::SleeveRight,
+        _ => panic!("Unknown part {}", parts[0]),
+    };
+
+    let (kind_str, index) = split_kind_and_index(parts[1]);
+
+    let kind = match kind_str {
+        "left_hem" => NodeKind::HemLeft,
+        "right_hem" => NodeKind::HemRight,
+        "left_cut" => NodeKind::CutLeft,
+        "right_cut" => NodeKind::CutRight,
+        "left_underarm" => NodeKind::UnderarmLeft,
+        "right_underarm" => NodeKind::UnderarmRight,
+
+        // 🔥 ВАЖНО: нормализуем плечи
+        "left_shoulder" => NodeKind::ShoulderLeft,
+        "right_shoulder" => NodeKind::ShoulderRight,
+
+        "left_neck" => NodeKind::NeckLeft,
+        "right_neck" => NodeKind::NeckRight,
+        "neck_left" => NodeKind::NeckEdgeLeft,
+        "neck_right" => NodeKind::NeckEdgeRight,
+        "neck_center" => NodeKind::NeckCenter,
+
+        "sleeve_top_left" => NodeKind::SleeveTopLeft,
+        "sleeve_top_right" => NodeKind::SleeveTopRight,
+
+        "sleeve_cuff_left" => NodeKind::SleeveCuffLeft,
+        "sleeve_cuff_right" => NodeKind::SleeveCuffRight,
+
+        "sleeve_cut_left" => NodeKind::SleeveCutLeft,
+        "sleeve_cut_right" => NodeKind::SleeveCutRight,
+
+        "sleeve_underarm_left" => NodeKind::SleeveUnderarmLeft,
+        "sleeve_underarm_right" => NodeKind::SleeveUnderarmRight,
+
+        _ => panic!("Unknown node kind {}", kind_str),
+    };
+
+    NodeId { part, kind, index }
+}
+
+fn split_kind_and_index(s: &str) -> (&str, Option<i32>) {
+    let mut parts = s.split('_').collect::<Vec<_>>();
+
+    if let Some(last) = parts.last() {
+        if let Ok(num) = last.parse::<i32>() {
+            parts.pop();
+            let kind = parts.join("_");
+            return (Box::leak(kind.into_boxed_str()), Some(num));
+        }
+    }
+
+    (s, None)
+}
+
+fn nodes_to_stitch_row_points(
     nodes: &Vec<BlueprintNodePosition>,
     viewbox_h: i32,
     r: f64,
     p: f64,
-) -> (Vec<BlueprintCoord>, Vec<BlueprintCoord>) {
-    let mut stitch_data = Vec::new();
-    let mut row_data = Vec::new();
+) -> BlueprintWithSeams {
+    let coords: Vec<BlueprintCoord> = nodes
+        .iter()
+        .map(|node| BlueprintCoord {
+            node_id: parse_node_id(&format!("{}.{}", node.part_code, node.node_name)),
+            stitch: (node.x / p).round(),
+            row: ((viewbox_h as f64 - node.y) / r).round(),
+        })
+        .collect();
 
-    // Группируем узлы по part_code
-    let mut parts_map: std::collections::HashMap<String, Vec<&BlueprintNodePosition>> =
-        std::collections::HashMap::new();
+    let seams = vec![
+        // 🔹 ГОРЛОВИНА: Front ↔ Back (плечевые швы)
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Front,
+                kind: NodeKind::NeckLeft, // Левое плечо переда
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::Back,
+                kind: NodeKind::NeckRight, // Правое плечо спины
+                index: None,
+            },
+        },
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Front,
+                kind: NodeKind::NeckRight, // Правое плечо переда
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::Back,
+                kind: NodeKind::NeckLeft, // Левое плечо спины
+                index: None,
+            },
+        },
+        // 🔹 ЛЕВЫЙ РУКАВ: соединяется с Front и Back
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Front,
+                kind: NodeKind::UnderarmLeft, // Передняя пройма слева
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::SleeveLeft,
+                kind: NodeKind::SleeveTopRight, // Верх рукава (передняя сторона)
+                index: None,
+            },
+        },
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Back,
+                kind: NodeKind::UnderarmLeft, // Задняя пройма слева
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::SleeveLeft,
+                kind: NodeKind::SleeveTopLeft, // Верх рукава (задняя сторона)
+                index: None,
+            },
+        },
+        // 🔹 ПРАВЫЙ РУКАВ: соединяется с Front и Back
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Front,
+                kind: NodeKind::UnderarmRight, // Передняя пройма справа
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::SleeveRight,
+                kind: NodeKind::SleeveTopLeft, // Верх рукава (передняя сторона)
+                index: None,
+            },
+        },
+        SeamConnection {
+            from: NodeId {
+                part: PartCode::Back,
+                kind: NodeKind::UnderarmRight, // Задняя пройма справа
+                index: None,
+            },
+            to: NodeId {
+                part: PartCode::SleeveRight,
+                kind: NodeKind::SleeveTopRight, // Верх рукава (задняя сторона)
+                index: None,
+            },
+        },
+    ];
 
-    for node in nodes {
-        parts_map
-            .entry(node.part_code.clone())
-            .or_insert_with(Vec::new)
-            .push(node);
-    }
-
-    // Для каждой детали вычисляем ширину на каждом ряду
-    for (part_code, part_nodes) in parts_map {
-        // Группируем узлы по номеру ряда (округляем y до целого)
-        let mut rows_map: std::collections::HashMap<i32, Vec<&BlueprintNodePosition>> =
-            std::collections::HashMap::new();
-
-        for node in part_nodes {
-            let row_num = ((viewbox_h as f64 - node.y) / r).round() as i32;
-            rows_map.entry(row_num).or_insert_with(Vec::new).push(node);
-        }
-
-        // 🔹 Сортируем ряды для последовательной обработки
-        let mut sorted_rows: Vec<_> = rows_map.keys().cloned().collect();
-        sorted_rows.sort();
-
-        // Для каждого ряда считаем ширину
-        for row_num in sorted_rows {
-            let row_nodes = rows_map.get(&row_num).unwrap();
-
-            // 🔹 Берём ВСЕ x-координаты на этом ряду
-            let mut x_coords: Vec<f64> = row_nodes.iter().map(|n| n.x).collect();
-            x_coords.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-            // 🔹 Ширина = размах между крайней левой и крайней правой точкой
-            if x_coords.len() >= 2 {
-                let min_x = x_coords.first().unwrap();
-                let max_x = x_coords.last().unwrap();
-                let width_stitches = ((max_x - min_x) / p).round();
-
-                // 🔹 Используем УНИКАЛЬНОЕ имя для каждого ряда
-                let node_name = format!("{}_row_{}", part_code, row_num);
-
-                stitch_data.push(BlueprintCoord {
-                    node_name: node_name.clone(),
-                    part_code: part_code.clone(),
-                    value: width_stitches,
-                });
-
-                row_data.push(BlueprintCoord {
-                    node_name,
-                    part_code: part_code.clone(),
-                    value: row_num as f64,
-                });
-            } else if x_coords.len() == 1 {
-                // 🔹 Если на ряду только одна точка — ширина 0 (вершина)
-                let node_name = format!("{}_row_{}", part_code, row_num);
-
-                stitch_data.push(BlueprintCoord {
-                    node_name: node_name.clone(),
-                    part_code: part_code.clone(),
-                    value: 0.0,
-                });
-
-                row_data.push(BlueprintCoord {
-                    node_name,
-                    part_code: part_code.clone(),
-                    value: row_num as f64,
-                });
-            }
-        }
-    }
-
-    (stitch_data, row_data)
+    BlueprintWithSeams { coords, seams }
 }
 
 fn bp(name: &str, x: f64, y: f64, part: &str) -> BlueprintNodePosition {
@@ -856,25 +937,52 @@ async fn load_measurements(
 fn gen_raglan_decreases(start: i32, end: i32, total: i32, r: f64) -> (Vec<i32>, Vec<i32>) {
     let mut rows = Vec::new();
     let mut counts = Vec::new();
+
+    if total <= 0 || start >= end {
+        return (rows, counts);
+    }
+
     let mut remaining = total;
     let mut current = start;
     let pattern = if r >= 3.5 { [1, 2, 1] } else { [1, 1, 2] };
     let mut pidx = 0;
+
+    // 🔹 Фиксированный шаг 2 ряда — высота реглана зависит только от обхвата груди!
     while remaining > 0 && current < end {
         let dc = pattern[pidx % 3].min(remaining);
         rows.push(current);
         counts.push(dc);
         remaining -= dc;
-        current += 2;
+        current += 2; // ← Ключевое: фиксированный интервал
         pidx += 1;
     }
-    if remaining > 0 {
-        rows.push(end.min(current));
-        counts.push(remaining);
+
+    // 🔹 Если убавки не влезли — «растягиваем» последнюю группу до конца
+    //    (лучше одна большая убавка в конце, чем случайное число)
+    if remaining > 0 && !rows.is_empty() {
+        // Добавляем остаток к последней группе, если она близко к концу
+        if let Some(last_row) = rows.last() {
+            if end - last_row <= 4 {
+                // Если до конца ≤ 4 ряда
+                if let Some(last_count) = counts.last_mut() {
+                    *last_count += remaining;
+                    remaining = 0;
+                }
+            }
+        }
     }
+
+    // 🔹 Если всё ещё остались — добавляем финальную группу прямо перед end
+    if remaining > 0 {
+        let final_row = (end - 1).max(start);
+        if rows.last().map_or(true, |&r| r != final_row) {
+            rows.push(final_row);
+            counts.push(remaining);
+        }
+    }
+
     (rows, counts)
 }
-
 pub fn decrease_groups_to_rows(groups: &[DecreaseGroup]) -> (Vec<i32>, Vec<i32>) {
     let mut rows = Vec::new();
     let mut counts = Vec::new();
@@ -898,37 +1006,22 @@ fn gen_sleeve_raglan_rows(dims: &SleeveDimensions, is_front_side: bool) -> Vec<i
         return vec![];
     };
 
-    // 🔹 1. Сколько петель было в начале (после прибавок)
     let start_stitches = raglan.start_raglan_stitches;
-
-    // 🔹 2. Сколько петель должно остаться на верхушке
     let top_stitches = raglan.top_stitches;
-
-    // 🔹 3. Сколько всего петель нужно убавить (с ОБОИХ сторон)
     let total_stitches_to_decrease = start_stitches.saturating_sub(top_stitches);
-
-    // 🔹 4. Сколько убавок с КАЖДОЙ стороны (делим пополам)
     let decreases_per_side = total_stitches_to_decrease / 2;
 
     if decreases_per_side <= 0 {
         return vec![];
     }
 
-    // 🔹 6. Доступные ряды для убавок
-    //    Это расстояние от подреза до горловины
+    // 🔹 Доступные ряды для убавок
     let front_available = raglan.sleeve_len_rows.saturating_sub(
         raglan
             .sleeve_len_rows
             .saturating_sub(raglan.raglan_line_rows),
     );
-    let back_available = raglan
-        .sleeve_len_rows
-        .saturating_sub(
-            raglan
-                .sleeve_len_rows
-                .saturating_sub(raglan.raglan_line_rows),
-        )
-        .saturating_sub(raglan.cap_offset.round() as i32);
+    let back_available = front_available.saturating_sub(raglan.cap_offset.round() as i32);
 
     let available_rows = if is_front_side {
         front_available
@@ -939,35 +1032,50 @@ fn gen_sleeve_raglan_rows(dims: &SleeveDimensions, is_front_side: bool) -> Vec<i
     if available_rows <= 0 {
         return vec![];
     }
-    let base_interval = ((available_rows as f64) / (decreases_per_side as f64/ 2.0))
-        .max(1.0) // не меньше 1
+
+    // Интервал = доступные ряды / количество убавок с одной стороны
+    let base_interval = ((available_rows as f64) / (decreases_per_side as f64))
+        .max(1.0)
         .floor() as i32;
 
-    // 🔹 Генерируем ряды РАВНОМЕРНО
+    // 🔹 ПРОВЕРКА: если убавок больше, чем влезает — ограничиваем
+    let max_possible_decreases = available_rows / base_interval.max(1);
+    let actual_decreases = decreases_per_side.min(max_possible_decreases);
+
+    if actual_decreases <= 0 {
+        return vec![];
+    }
+
+    // 🔹 Генерируем ряды РАВНОМЕРНО с возможным джиттером для равномерности
     let mut result = Vec::new();
     let start_row = dims.increase_rows().iter().last().unwrap_or(&0) + 2;
 
-    for i in 0..decreases_per_side {
-        let row = start_row + (i * base_interval);
-        if row <= start_row + available_rows {
-            result.push(row);
+    // Используем накопитель для равномерного распределения (алгоритм Брезенхема)
+    let mut error = 0;
+    for i in 0..actual_decreases {
+        error += available_rows;
+        if error >= actual_decreases {
+            let row = start_row + (i * base_interval) + (error / actual_decreases);
+            if row <= start_row + available_rows {
+                result.push(row);
+            }
+            error -= actual_decreases;
         }
     }
 
-    // 🔹 Если убавок получилось меньше — добавляем последние в конце доступной зоны
-    while result.len() <= decreases_per_side as usize {
-        let last_possible_row = start_row + available_rows;
-        if !result.contains(&last_possible_row) {
-            result.push(last_possible_row);
+    // 🔹 Фоллбэк: если убавок не хватило — добавляем в конец
+    while result.len() < actual_decreases as usize {
+        let candidate = start_row + available_rows - (result.len() as i32);
+        if candidate > start_row && !result.contains(&candidate) {
+            result.push(candidate);
         } else {
-            break; // больше некуда добавлять
+            break;
         }
     }
 
-    result.sort(); // сортируем по возрастанию
+    result.sort();
     result
 }
-
 pub fn calculate_proyma_decreases(proyma_width: i32) -> Vec<DecreaseGroup> {
     let mut steps = Vec::new();
     let part1 = proyma_width / 4 + proyma_width % 4;

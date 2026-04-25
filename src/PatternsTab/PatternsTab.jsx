@@ -324,7 +324,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
         req: {
           image_path: patternFile,
           output_path: outputPath,
-          mirror_horizontal: true,
+          reverse: true,
           threshold: 128,
           invert: false,
           pattern_char_dark: "1",

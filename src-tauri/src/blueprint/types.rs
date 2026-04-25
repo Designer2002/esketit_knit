@@ -17,6 +17,45 @@ pub struct DecreaseStep {
     pub row_delta: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum PartCode {
+    Front,
+    Back,
+    SleeveLeft,
+    SleeveRight,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum NodeKind {
+    HemLeft,
+    HemRight,
+    CutLeft,
+    CutRight,
+    UnderarmLeft,
+    UnderarmRight,
+    ShoulderLeft,
+    ShoulderRight,
+    NeckLeft,
+    NeckRight,
+    SleeveTopLeft,
+    SleeveTopRight,
+    SleeveCutLeft,
+    SleeveCutRight,
+    SleeveUnderarmLeft,
+    SleeveUnderarmRight,
+    SleeveCuffLeft,
+    SleeveCuffRight,
+    NeckEdgeRight,
+    NeckEdgeLeft,
+    NeckCenter
+
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct NodeId {
+    pub part: PartCode,
+    pub kind: NodeKind,
+    pub index: Option<i32>,
+}
 /// Measurement set for ALL calculations (Raglan & Set-In)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectMeasurements {
@@ -91,16 +130,29 @@ pub struct RaglanCalculation {
     pub sleeve_raglan_rows_back: Vec<i32>,
     pub sleeve_raglan_rows_front: Vec<i32>,
     pub neck_rem: f64,
-    pub blueprint_stitch_data: Vec<BlueprintCoord>,  // x в петлях
-    pub blueprint_row_data: Vec<BlueprintCoord>,     // y в рядах
+    pub blueprint_coords: BlueprintWithSeams
 }
 
 // 🔹 Вспомогательная структура для координат
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
 pub struct BlueprintCoord {
-    pub node_name: String,
-    pub part_code: String,
-    pub value: f64,  // петли (для stitch) или ряды (для row)
+    pub node_id: NodeId,
+    pub(crate) stitch: f64,
+    pub(crate) row: f64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SeamConnection {
+    pub from: NodeId,
+    pub to: NodeId,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct BlueprintWithSeams {
+    pub coords: Vec<BlueprintCoord>,
+    pub seams: Vec<SeamConnection>,
 }
 
 impl Calculation for RaglanCalculation {
@@ -114,12 +166,7 @@ impl Calculation for RaglanCalculation {
     fn sleeve_top_stitches(&self) -> i32 { self.sleeve_top_stitches }
     fn total_rows(&self) -> i32 { self.total_rows }
     fn as_raglan(&self) -> Option<&RaglanCalculation> { Some(self) }
-    fn blueprint_stitch_data(&self) -> &Vec<BlueprintCoord> {
-        &self.blueprint_stitch_data
-    }
-    fn blueprint_row_data(&self) -> &Vec<BlueprintCoord> {
-        &self.blueprint_row_data
-    }
+    fn blueprint_coords(&self) -> BlueprintWithSeams { self.blueprint_coords.clone() }
     
 }
 
@@ -167,8 +214,7 @@ pub struct SetInSleeveCalculation {
     pub waist_end_row: i32,                  // Ряд конца убавок (талия)
     pub waist_point_row: i32,                // Ряд линии талии
 
-    pub blueprint_stitch_data: Vec<BlueprintCoord>,  // x в петлях
-    pub blueprint_row_data: Vec<BlueprintCoord>,     // y в рядах
+    pub blueprint_coords: BlueprintWithSeams,  
 }
 
 impl Calculation for SetInSleeveCalculation {
@@ -183,12 +229,8 @@ impl Calculation for SetInSleeveCalculation {
     fn total_rows(&self) -> i32 { self.total_garment_rows }
     fn as_set_in(&self) -> Option<&SetInSleeveCalculation> { Some(self) }
     
-    fn blueprint_stitch_data(&self) -> &Vec<BlueprintCoord> {
-        &self.blueprint_stitch_data
-    }
-    
-    fn blueprint_row_data(&self) -> &Vec<BlueprintCoord> {
-        &self.blueprint_row_data
+    fn blueprint_coords(&self) -> BlueprintWithSeams {
+        self.blueprint_coords.clone()
     }
 }
 

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import "./CreateProject.css";
 import useToast from "../Toast/useToast";
 import "../Toast/Toast.css";
-import { Sweater3DPreview } from "../Sweater3D/Sweater3D";
+import { Sweater3DPreview } from "../Sweater3D/Sweater3D.jsx";
 
 // ===== Компонент кнопки =====
 function FancyButton({ children, onClick }) {
@@ -63,6 +63,7 @@ export default function CreateProject() {
 
       // result содержит nodes + blueprint_stitch_data + blueprint_row_data
       setCalculatedData(result);
+      //console.log("Calculated blueprint data:", result);
     } catch (error) {
       console.error("Failed to calculate blueprint:", error);
       // Fallback: используем дефолтные данные размера M
@@ -290,7 +291,6 @@ export default function CreateProject() {
       }
     }
   }
-
   return (
     <>
       <div
@@ -535,13 +535,13 @@ export default function CreateProject() {
           {isInitialized && (
             <div className="preview-3d preview-3d-compact">
               <Sweater3DPreview
-                height={400}
+                height={300}
+                stamps={null}
                 // 🔹 Используем рассчитанные nodes
-                nodes={calculatedData?.nodes}
                 // 🔹 Передаём новые данные для позиционирования
-                stitchData={calculatedData?.blueprint_stitch_data}
-                rowData={calculatedData?.blueprint_row_data}
+                data={calculatedData?.blueprint_coords}
                 autoRotate={true}
+                textureUrl={"/textures/knit_3d.jpg"}
               />
             </div>
           )}

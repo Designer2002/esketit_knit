@@ -82,7 +82,7 @@ pub async fn convert_image_to_pattern(
     }
 
     // Настройки преобразования
-    let mirror = req.mirror_horizontal.unwrap_or(false);
+    let reverse = req.mirror_horizontal.unwrap_or(false);
     let threshold = req.threshold.unwrap_or(128);
     let invert = req.invert.unwrap_or(false);
     let dark_char = req.pattern_char_dark.unwrap_or('1');
@@ -96,7 +96,7 @@ pub async fn convert_image_to_pattern(
         convert_image_to_pattern_sync(
             &image_path_clone,
             &output_path_clone,
-            mirror,
+            reverse,
             threshold,
             invert,
             dark_char,
@@ -129,7 +129,7 @@ pub async fn convert_image_to_pattern(
 fn convert_image_to_pattern_sync(
     image_path: &Path,
     output_path: &Path,
-    mirror_horizontal: bool,
+    reverse: bool,
     threshold: u8,
     invert: bool,
     dark_char: char,
@@ -143,9 +143,9 @@ fn convert_image_to_pattern_sync(
     let (width, height) = grayscale.dimensions();
 
     // Применяем зеркалирование если нужно
-    let processed: ImageBuffer<Luma<u8>, Vec<u8>> = if mirror_horizontal {
+    let processed: ImageBuffer<Luma<u8>, Vec<u8>> = if reverse {
         ImageBuffer::from_fn(width, height, |x, y| {
-            grayscale.get_pixel(width - 1 - x, y).clone()
+            grayscale.get_pixel(width - 1 - x, height - 1 - y).clone()
         })
     } else {
         grayscale

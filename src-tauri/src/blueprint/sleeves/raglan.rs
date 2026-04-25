@@ -20,7 +20,7 @@ impl RaglanSleeve {
 
     /// Helper: calculate raglan line position in rows (front)
     fn calc_raglan_line_rows_front(og: f64, r: f64) -> i32 {
-        let raglan_line_front = (og / 2.0 / 3.0) + 7.0;
+        let raglan_line_front = (og / 2.0 / 3.0 / 2.0) + 7.0;
         (raglan_line_front * r).round() as i32
     }
 }
@@ -132,12 +132,6 @@ impl SleeveType for RaglanSleeve {
                 y: cuff_y,
                 part_code: "sleeve_left".into(),
             },
-            BlueprintNodePosition {
-                node_name: "sleeve_cuff_right".into(),
-                x: cx + half_cuff,
-                y: cuff_y,
-                part_code: "sleeve_left".into(),
-            },
 
             // === Подрезы (макс. ширина) ===
             BlueprintNodePosition {
@@ -146,12 +140,7 @@ impl SleeveType for RaglanSleeve {
                 y: cut_y,
                 part_code: "sleeve_left".into(),
             },
-            BlueprintNodePosition {
-                node_name: "sleeve_cut_right".into(),
-                x: cx + sleeve_widest / 2.0,
-                y: cut_y,
-                part_code: "sleeve_left".into(),
-            },
+           
 
             // === Подмышки (начало реглан-линии) ===
             BlueprintNodePosition {
@@ -160,13 +149,7 @@ impl SleeveType for RaglanSleeve {
                 y: cut_y,
                 part_code: "sleeve_left".into(),
             },
-            BlueprintNodePosition {
-                node_name: "sleeve_underarm_right".into(),
-                x: cx + underarm_x_offset,
-                y: cut_y,
-                part_code: "sleeve_left".into(),
-            },
-
+            
             // === Верх рукава (горловина) ===
             BlueprintNodePosition {
                 node_name: "sleeve_top_left".into(),
@@ -178,6 +161,25 @@ impl SleeveType for RaglanSleeve {
                 node_name: "sleeve_top_right".into(),
                 x: cx + half_top,
                 y: base_y + slope_drop,
+                part_code: "sleeve_left".into(),
+            },
+            BlueprintNodePosition {
+                node_name: "sleeve_underarm_right".into(),
+                x: cx + underarm_x_offset,
+                y: cut_y,
+                part_code: "sleeve_left".into(),
+            },
+
+             BlueprintNodePosition {
+                node_name: "sleeve_cut_right".into(),
+                x: cx + sleeve_widest / 2.0,
+                y: cut_y,
+                part_code: "sleeve_left".into(),
+            },
+             BlueprintNodePosition {
+                node_name: "sleeve_cuff_right".into(),
+                x: cx + half_cuff,
+                y: cuff_y,
                 part_code: "sleeve_left".into(),
             },
         ]

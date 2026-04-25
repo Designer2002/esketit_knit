@@ -24,28 +24,18 @@ const DEFAULT_MEASUREMENTS = {
   gauge_stitches_per_cm: 2.5,
   gauge_rows_per_cm: 3.5,
 };
-function buildBounds2D(nodes) {
-  const grouped = {};
+function calculatePartBounds(partNodes) {
+  if (!partNodes?.length) return null;
 
-  nodes.forEach((n) => {
-    if (!grouped[n.part_code]) {
-      grouped[n.part_code] = [];
-    }
-    grouped[n.part_code].push(n);
-  });
+  const xs = partNodes.map((n) => n.x);
+  const ys = partNodes.map((n) => n.y);
 
-  const bounds = {};
-
-  Object.entries(grouped).forEach(([part, list]) => {
-    bounds[part] = {
-      minX: Math.min(...list.map((n) => n.x)),
-      maxX: Math.max(...list.map((n) => n.x)),
-      minY: Math.min(...list.map((n) => n.y)),
-      maxY: Math.max(...list.map((n) => n.y)),
-    };
-  });
-
-  return bounds;
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
 }
 const MEASUREMENT_LABELS = {
   og: {
@@ -384,12 +374,7 @@ function BlueprintSVG({
   const vbW = calculation?.viewbox_width || 100;
   const vbH = calculation?.viewbox_height || 100;
 
-  const bounds = useMemo(() => buildBounds2D(nodes), [nodes]);
-    useEffect(() => {
-  if (bounds && onBoundsUpdate) {
-    onBoundsUpdate(partCode, bounds);
-  }
-}, [bounds, partCode, onBoundsUpdate]); 
+  
 
   // SVG-based stamp dragging
   const handleStampMouseDown = (e, stampId) => {
@@ -468,7 +453,16 @@ function BlueprintSVG({
   [nodes, partCode]  // 👈 пересчитываем только при реальном изменении
 );
 
-  
+   useEffect(() => {
+    if (!partNodes?.length || !onBoundsUpdate) return;
+
+    const bounds = calculatePartBounds(partNodes);
+    if (bounds) {
+      onBoundsUpdate(partCode, bounds);
+    }
+    console.log("📐 Calculated bounds for", partCode, bounds);
+  }, [partCode, partNodes, onBoundsUpdate]);
+
 
   // Фильтруем только КЛЮЧЕВЫЕ узлы (не промежуточные pts)
   // Промежуточные узлы имеют числовой суффикс: armhole_0, shoulder_1, neck_2 и т.д.

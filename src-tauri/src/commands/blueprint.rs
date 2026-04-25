@@ -348,8 +348,7 @@ pub async fn calculate_blueprint(
             "nodes": r.nodes,
             "sleeve_raglan_rows_back": r.sleeve_raglan_rows_back,
             "sleeve_raglan_rows_front": r.sleeve_raglan_rows_front,
-            "blueprint_stitch_data": r.blueprint_stitch_data,
-            "blueprint_row_data": r.blueprint_row_data,
+            "blueprint_coords": r.blueprint_coords
         })),
         BlueprintCalculation::SetIn(s) => {
             let (armhole_rows, armhole_counts) = decrease_groups_to_rows(&s.armhole_decreases);
@@ -397,8 +396,7 @@ pub async fn calculate_blueprint(
                 "waist_start_row": s.waist_start_row,
                 "waist_end_row": s.waist_end_row,
                 "waist_point_row": s.waist_point_row,
-                "blueprint_stitch_data": s.blueprint_stitch_data,
-                "blueprint_row_data": s.blueprint_row_data,
+                "blueprint_coords": s.blueprint_coords
             }))
         }
     }

@@ -1,0 +1,599 @@
+import { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
+import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import * as THREE from "three";
+import { useRef } from "react";
+import { useLayoutEffect } from "react";
+
+// ===== UTILITIES =====
+/**
+ * Разделяет профиль рукава на две части по cutY
+ * @returns {{ upper: Array, cuff: Array }}
+ */
+
+function fitCameraToObject(camera, object, offset = 1.2) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  box.getSize(size);
+  box.getCenter(center);
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * offset;
+
+  camera.position.set(center.x, center.y - cameraZ, cameraZ);
+  camera.lookAt(center);
+
+  camera.near = 0.1;
+  camera.far = cameraZ * 10;
+  camera.updateProjectionMatrix();
+
+  return center;
+}
+// ===== UTILITIES =====
+
+/**
+ * "Волнистое" надувание: сдвиг по нормалям + синусоидальная волна
+ * @param {THREE.BufferGeometry} geometry
+ * @param {number} baseAmount - базовый объём
+ * @param {number} waveAmplitude - высота волны
+ * @param {number} waveFrequency - частота волны (чем больше, тем чаще рябь)
+ */
+function inflateGeometry(geometry, baseAmount = 0.3, waveAmplitude = 0.15, waveFrequency = 8) {
+  const pos = geometry.attributes.position;
+  
+  if (!geometry.attributes.normal) geometry.computeVertexNormals();
+  const normal = geometry.attributes.normal;
+  
+  // Если есть UV — используем V для волны (направление вязки)
+  const hasUV = !!geometry.attributes.uv;
+  
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const uvV = hasUV ? geometry.attributes.uv.getY(i) : y * 0.01;
+    
+    // 🌊 Синусоидальная волна вдоль Y/UV
+    const waveOffset = Math.sin(uvV * waveFrequency * Math.PI * 2) * waveAmplitude;
+    
+    // Микро-шум для "пушистости"
+    const noise = (Math.random() - 0.5) * 0.03;
+    
+    // Итоговый сдвиг
+    const totalOffset = baseAmount + waveOffset + noise;
+    
+    pos.setXYZ(
+      i,
+      pos.getX(i) + normal.getX(i) * totalOffset,
+      pos.getY(i) + normal.getY(i) * totalOffset,
+      pos.getZ(i) + normal.getZ(i) * totalOffset
+    );
+  }
+  
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
+}
+/**
+ * Генерация корректных UV для выкройки (проекция на плоскость)
+ */
+/**
+ * Генерация UV с обработкой боковых граней ExtrudeGeometry
+ */
+function generateFlatUVs(geometry) {
+  const pos = geometry.attributes.position;
+  const uvs = [];
+  
+  // Находим границы
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    minX = Math.min(minX, pos.getX(i));
+    maxX = Math.max(maxX, pos.getX(i));
+    minY = Math.min(minY, pos.getY(i));
+    maxY = Math.max(maxY, pos.getY(i));
+    minZ = Math.min(minZ, pos.getZ(i));
+    maxZ = Math.max(maxZ, pos.getZ(i));
+  }
+  
+  const width = maxX - minX || 1;
+  const height = maxY - minY || 1;
+  const depth = maxZ - minZ || 1;
+  
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    
+    // 🔥 Определяем, какая это грань по координате Z
+    const isFront = Math.abs(z - maxZ) < 0.01;
+    const isBack = Math.abs(z - minZ) < 0.01;
+    const isSide = !isFront && !isBack;
+    
+    let u, v;
+    
+    if (isFront || isBack) {
+      // Лицевая/тыльная: проекция на плоскость
+      u = (x - minX) / width;
+      v = 1 - (y - minY) / height;
+    } else {
+      // 🔥 Боковая грань: "разворачиваем" по периметру
+      // Используем комбинацию X/Y для U, Z для V
+      const perimeter = width * 2 + height * 2;
+      let dist = 0;
+      
+      // Упрощённо: определяем сторону по доминирующей координате
+      if (Math.abs(x - minX) < 0.1) dist = 0 + (y - minY);           // левая
+      else if (Math.abs(x - maxX) < 0.1) dist = height + (x - minX); // правая
+      else if (Math.abs(y - minY) < 0.1) dist = height + width + (maxX - x); // низ
+      else dist = height + width + height + (x - minX); // верх
+      
+      u = dist / perimeter;
+      v = (z - minZ) / depth; // глубина как вторая координата
+    }
+    
+    uvs.push(u, v);
+  }
+  
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+}
+
+function getProfileBounds(profile) {
+  if (!profile?.length) return { width: 0, height: 0, minY: 0, maxY: 0, centerX: 0 };
+  const minY = Math.min(...profile.map((p) => p.row));
+  const maxY = Math.max(...profile.map((p) => p.row));
+  const minStitch = Math.min(...profile.map((p) => p.stitch));
+  const maxStitch = Math.max(...profile.map((p) => p.stitch));
+  return {
+    width: maxStitch - minStitch,
+    height: maxY - minY,
+    minY,
+    maxY,
+    centerX: (minStitch + maxStitch) / 2,
+  };
+}
+
+function getArmholeCenter(data, partCode) {
+  const leftUnderarm = data.find(
+    (d) => d.part_code === partCode && d.node_name === `${partCode}_left_underarm`
+  );
+  const rightUnderarm = data.find(
+    (d) => d.part_code === partCode && d.node_name === `${partCode}_right_underarm`
+  );
+  return {
+    left: leftUnderarm ? { stitch: leftUnderarm.stitch, row: leftUnderarm.row } : null,
+    right: rightUnderarm ? { stitch: rightUnderarm.stitch, row: rightUnderarm.row } : null,
+  };
+}
+
+function getSleevePosition(armholePoint, sleeveBounds, cap = 0) {
+  if (!armholePoint) return [0, 0, 0];
+  const offsetX = armholePoint.stitch - sleeveBounds.centerX;
+  const offsetY = armholePoint.row - cap;
+  return [offsetX, offsetY, 0];
+}
+
+function buildShapeFromProfile(profile) {
+  profile = profile.filter((p) => !p.node_name.includes("neck_center") && !p.node_name.startsWith("back_left_neck") && !p.node_name.startsWith("back_right_neck") && !p.node_name.startsWith("front_left_shoulder") && !p.node_name.startsWith("front_right_shoulder"));
+  
+  const shape = new THREE.Shape();
+  if (!profile?.length) return shape;
+  
+  const left = profile.filter((p) => p.node_name.includes("_left"));
+  const right = profile.filter((p) => p.node_name.includes("_right"));
+  const minX = Math.min(...profile.map((p) => p.stitch));
+  const maxX = Math.max(...profile.map((p) => p.stitch));
+  const centerX = (minX + maxX) / 2;
+  
+  left.forEach((p, i) => {
+    const x = p.stitch - centerX;
+    const y = p.row;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  });
+  right.forEach((p) => shape.lineTo(p.stitch - centerX, p.row));
+  shape.closePath();
+  return shape;
+}
+/**
+ * Сворачивает часть рукава в цилиндр (только вершины выше cutY)
+ * Работает в ЛОКАЛЬНЫХ координатах, ДО применения матрицы трансформации
+ */
+function tubeSleeveSection(geo, cutY, radius = 12, transitionLength = 30) {
+  const pos = geo.attributes.position;
+  
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    
+    // Применяем только к части ПОСЛЕ среза (выше по Y)
+    if (y >= cutY) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      
+      // Прогресс: 0 на линии среза → 1 на конце рукава
+      const progress = Math.min(1, (y - cutY) / transitionLength);
+      
+      // Плавный переход от плоского к цилиндрическому
+      const theta = (x / radius) * progress;
+      const cos = Math.cos(theta);
+      const sin = Math.sin(theta);
+      
+      // Интерполяция между плоским и цилиндрическим состоянием
+      const newX = cos * radius * progress + x * (1 - progress);
+      const newZ = sin * radius * progress + z; // Z сохраняем для глубины
+      
+      pos.setXYZ(i, newX, y, newZ);
+    }
+  }
+  
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+function foldAlongAxis(geo, axis, foldValue, strength) {
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    if (axis === "x" && x > foldValue) {
+      const dx = x - foldValue;
+      pos.setXYZ(i, foldValue - dx, y, z + dx * strength);
+    } else if (axis === "y" && y > foldValue) {
+      const dy = foldValue - y;
+      pos.setXYZ(i, x, foldValue - dy, z + dy * strength);
+    }
+  }
+  pos.needsUpdate = true;
+}
+function splitBufferGeometryByPlane(geometry, planeNormal, planeConstant) {
+  const posAttr = geometry.attributes.position;
+  const index = geometry.index;
+
+  const belowPositions = []; // "remaining" (ниже плоскости)
+  const abovePositions = []; // "cutOff" (выше плоскости)
+  const belowIndices = [];
+  const aboveIndices = [];
+  let belowIdx = 0,
+    aboveIdx = 0;
+
+  const vec = new THREE.Vector3();
+
+  function processTriangle(i0, i1, i2) {
+    vec.fromBufferAttribute(posAttr, i0);
+    const v0 = vec.clone();
+    vec.fromBufferAttribute(posAttr, i1);
+    const v1 = vec.clone();
+    vec.fromBufferAttribute(posAttr, i2);
+    const v2 = vec.clone();
+
+    const d0 = planeNormal.dot(v0) + planeConstant;
+    const d1 = planeNormal.dot(v1) + planeConstant;
+    const d2 = planeNormal.dot(v2) + planeConstant;
+
+    // Стороны: -1 = below, 1 = above
+    const s0 = d0 <= 0 ? -1 : 1;
+    const s1 = d1 <= 0 ? -1 : 1;
+    const s2 = d2 <= 0 ? -1 : 1;
+
+    // 1. Треугольник целиком на одной стороне
+    if (s0 === s1 && s1 === s2) {
+      const verts = [v0, v1, v2];
+      const targetPos = s0 === -1 ? belowPositions : abovePositions;
+      const targetIdx = s0 === -1 ? belowIndices : aboveIndices;
+      let idx = s0 === -1 ? belowIdx : aboveIdx;
+
+      verts.forEach((v) => targetPos.push(v.x, v.y, v.z));
+      targetIdx.push(idx, idx + 1, idx + 2);
+      if (s0 === -1) belowIdx += 3;
+      else aboveIdx += 3;
+      return;
+    }
+
+    // 2. Треугольник пересекает плоскость → клиппинг
+    const belowVerts = [];
+    const aboveVerts = [];
+    const edges = [
+      [v0, d0, v1, d1],
+      [v1, d1, v2, d2],
+      [v2, d2, v0, d0],
+    ];
+
+    for (const [a, da, b, db] of edges) {
+      const sa = da <= 0 ? -1 : 1;
+      const sb = db <= 0 ? -1 : 1;
+
+      // Добавляем текущую вершину в нужную сторону
+      if (sa === -1) belowVerts.push(a.clone());
+      else aboveVerts.push(a.clone());
+
+      // Если ребро пересекает плоскость → добавляем точку пересечения в обе стороны
+      if ((da > 0 && db <= 0) || (da <= 0 && db > 0)) {
+        const t = da / (da - db);
+        const intersect = new THREE.Vector3().lerpVectors(a, b, t);
+        belowVerts.push(intersect.clone());
+        aboveVerts.push(intersect.clone());
+      }
+    }
+
+    // Триангуляция веером (для плоского сечения всегда работает)
+    const fanTriangulate = (verts, targetPos, targetIdx, startIdx) => {
+      if (verts.length < 3) return startIdx;
+      for (let i = 1; i < verts.length - 1; i++) {
+        [verts[0], verts[i], verts[i + 1]].forEach((v) =>
+          targetPos.push(v.x, v.y, v.z),
+        );
+        targetIdx.push(startIdx, startIdx + 1, startIdx + 2);
+        startIdx += 3;
+      }
+      return startIdx;
+    };
+
+    belowIdx = fanTriangulate(
+      belowVerts,
+      belowPositions,
+      belowIndices,
+      belowIdx,
+    );
+    aboveIdx = fanTriangulate(
+      aboveVerts,
+      abovePositions,
+      aboveIndices,
+      aboveIdx,
+    );
+  }
+
+  // Обход треугольников
+  if (index) {
+    for (let i = 0; i < index.count; i += 3) {
+      processTriangle(index.getX(i), index.getX(i + 1), index.getX(i + 2));
+    }
+  } else {
+    for (let i = 0; i < posAttr.count; i += 3) {
+      processTriangle(i, i + 1, i + 2);
+    }
+  }
+
+  // Создаём геометрии
+  const createGeom = (positions, indices) => {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3),
+    );
+    if (indices.length > 0) geom.setIndex(indices);
+    geom.computeVertexNormals(); // Пересчитываем нормали для корректного освещения
+    return geom;
+  };
+
+  return {
+    remaining: createGeom(belowPositions, belowIndices),
+    cutOff: createGeom(abovePositions, aboveIndices),
+  };
+}
+
+function mergeSweaterGeometries(parts) {
+  const geometries = [];
+
+  parts.forEach((part) => {
+    const shape = buildShapeFromProfile(part.profile);
+    
+    // 🔥 Больше сегментов = глаже форма + лучше надувание
+    const geom = new THREE.ExtrudeGeometry(shape, {
+      depth: 2,
+      steps: 64,
+      curveSegments: 64, // ✅ Было 24 → 32 для гладкости
+      bevelEnabled: false,
+    });
+
+    // Центрируем локально
+    geom.computeBoundingBox();
+    const center = new THREE.Vector3();
+    geom.boundingBox.getCenter(center);
+    geom.translate(-center.x, -center.y, 0);
+    
+    // Складываем левый рукав (если нужно)
+    if (part.profile[0].part_code === "sleeve_left") {
+      foldAlongAxis(geom, "x", 0, 0.1);
+    }
+    
+    // 🔥 Сворачиваем рукав в трубу (ТОЛЬКО для sleeve_*)
+    if (part.profile[0].part_code.startsWith("sleeve")) {
+      // Находим координату среза в локальных координатах
+      const topNode = part.profile.find(p => p.node_name === "sleeve_top_left");
+      const cutNode = part.profile.find(p => p.node_name === "sleeve_cut_left");
+      
+      if (topNode && cutNode) {
+        // cutY в локальной системе (до применения матрицы!)
+        const cutY = topNode.row - cutNode.row;
+        
+        // 🔥 Сворачиваем часть рукава после cutY
+        tubeSleeveSection(geom, cutY, 21, 35); // radius=12, transition=35
+        //foldAlongAxis(geom, "y", cutY/2, Math.PI/4);
+      }
+    }
+    
+    // Применяем глобальную трансформацию (позиция/поворот)
+    const matrix = new THREE.Matrix4();
+    matrix.compose(
+      new THREE.Vector3(...part.position),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.rotation)),
+      new THREE.Vector3(1, 1, 1)
+    );
+    geom.applyMatrix4(matrix);
+    
+    // 🔥 Мягкое надувание (после всех трансформаций!)
+    inflateGeometry(geom, 1.3, 0.42, 10);
+    
+    geometries.push(geom);
+  });
+
+  // Нормализация перед слиянием
+  const normalizedGeometries = geometries.map((geom) => {
+    const cleanGeom = geom.index ? geom.toNonIndexed() : geom.clone();
+    //if (!cleanGeom.attributes.normal) cleanGeom.computeVertexNormals();
+   //generateFlatUVs(cleanGeom);
+    return cleanGeom;
+  });
+
+  return BufferGeometryUtils.mergeGeometries(normalizedGeometries, false);
+}
+
+// ===== MAIN COMPONENT =====
+
+function FlatPattern({ data, color, textureUrl }) {
+  // 🔥 Загружаем текстуру через drei
+  const yarnTexture = new THREE.TextureLoader().load(textureUrl);
+yarnTexture.colorSpace = THREE.SRGBColorSpace; // или tex.encoding = THREE.sRGBEncoding для старых версий
+  
+  // Настройки повторения
+  yarnTexture.wrapS = yarnTexture.wrapT = THREE.RepeatWrapping;
+  yarnTexture.repeat.set(0.03, 0.03); // 6 повторов по ширине, 10 по высоте
+  
+  yarnTexture.anisotropy = 16;
+  yarnTexture.flipY = false; // Чтобы не переворачивалась
+  yarnTexture.needsUpdate = true;
+  yarnTexture.colorSpace = THREE.SRGBColorSpace;
+
+
+  
+  
+  
+  
+  
+
+  const groupedData = useMemo(
+    () => ({
+      back: data.filter((d) => d.part_code === "back"),
+      front: data.filter((d) => d.part_code === "front"),
+      sleeve_left: data.filter((d) => d.part_code === "sleeve_left"),
+      sleeve_right: data.filter((d) => d.part_code === "sleeve_right"),
+    }),
+    [data]
+  );
+
+  const backBounds = getProfileBounds(groupedData.back);
+  const frontBounds = getProfileBounds(groupedData.front);
+  const sleeveLBounds = getProfileBounds(groupedData.sleeve_left);
+  const sleeveRBounds = getProfileBounds(groupedData.sleeve_right);
+
+  const backArmholes = getArmholeCenter(data, "back");
+  const frontArmholes = getArmholeCenter(data, "front");
+
+  const parts = useMemo(() => {
+    const result = [];
+    let currentX = 0;
+
+    if (groupedData.back.length) {
+      result.push({ profile: groupedData.back, position: [currentX, 0, 0], rotation: [0, 0, 0] });
+      currentX += backBounds.width;
+    }
+    if (groupedData.front.length) {
+      result.push({ profile: groupedData.front, position: [currentX, 0, 0], rotation: [0, 0, 0] });
+    }
+
+    const cap = (data.find((d) => d.node_name === "sleeve_top_left")?.row || 0) -
+                (data.find((d) => d.node_name === "sleeve_top_right")?.row || 0);
+
+    if (groupedData.sleeve_left.length && backArmholes.left) {
+      const x = (frontArmholes.left.stitch + backArmholes.left.stitch - 10) / 2;
+      const y = backArmholes.left.row;
+      result.push({
+        profile: groupedData.sleeve_left,
+        position: getSleevePosition({ stitch: x, row: y }, sleeveLBounds, cap),
+        rotation: [0, 0, Math.PI],
+      });
+    }
+    if (groupedData.sleeve_right.length && backArmholes.right) {
+      const x = (backArmholes.right.stitch + frontArmholes.right.stitch) / 2;
+      const y = backArmholes.right.row;
+      result.push({
+        profile: groupedData.sleeve_right,
+        position: getSleevePosition({ stitch: x, row: y }, sleeveRBounds, cap),
+        rotation: [0, 0, Math.PI],
+      });
+    }
+    return result;
+  }, [groupedData, backBounds, frontBounds, sleeveLBounds, sleeveRBounds, backArmholes, frontArmholes, data]);
+
+  const mergedGeometry = useMemo(() => {
+    const geo = mergeSweaterGeometries(parts);
+    geo.computeBoundingBox();
+    const centerX = (geo.boundingBox.max.x - geo.boundingBox.min.x) / 4;
+    const centerY = geo.boundingBox.max.y * 0.75;
+    foldAlongAxis(geo, "x", centerX, 0.1);
+    //foldAlongAxis(geo, "y", centerY, 1);
+    console.log(geo)
+    
+    return geo;
+  }, [parts]);
+console.log(yarnTexture)
+  return (
+    <mesh geometry={mergedGeometry}>
+      <meshBasicMaterial
+        color={color}
+        side={THREE.DoubleSide}
+        map={yarnTexture}           // 🔥 Текстура
+        roughness={0.9}
+        metalness={0.05}
+      />
+    </mesh>
+  );
+}
+export function Sweater3DPreview({
+  height = 500,
+  yarnColor = "#fe90e3",
+  textureUrl,
+  autoRotate = false,
+  data,
+}) {
+  const meshRef = useRef();
+
+  useLayoutEffect(() => {
+    if (meshRef.current) {
+      fitCameraToObject(meshRef.current.parent.__r3f?.camera, meshRef.current);
+    }
+  }, []);
+  return (
+    <div className="sweater-3d-container" style={{ height: `${height}px` }}>
+      <Canvas
+        camera={{ position: [0, -200, 300], fov: 35 }}
+        style={{ background: "transparent" }}
+        dpr={[1, 2]}
+        onCreated={({ gl, camera, scene }) => {
+          gl.setClearColor("#000000", 0); // прозрачный фон
+        }}
+      >
+        <fog attach="fog" args={["#a3cdff", 300, 500]} />
+        <ambientLight intensity={0.3} />
+        <directionalLight
+          position={[200, 300, 200]}
+          intensity={2.5}
+          castShadow
+        />
+        <directionalLight position={[-200, 100, -200]} intensity={0.8} />
+        <pointLight position={[0, 200, -300]} intensity={1.5} />
+        <FlatPattern data={data} color={yarnColor} textureUrl={textureUrl} />
+
+        <ContactShadows
+          position={[0, -100, 0]}
+          opacity={0.3}
+          scale={600}
+          blur={2}
+          far={150}
+        />
+        <Environment preset="warehouse" />
+
+        <OrbitControls
+          enablePan={false}
+          minDistance={120}
+          maxDistance={600}
+          autoRotate={autoRotate}
+          autoRotateSpeed={0.5}
+          enableDamping
+          dampingFactor={0.08}
+        />
+      </Canvas>
+    </div>
+  );
+}
+
+export default Sweater3DPreview;

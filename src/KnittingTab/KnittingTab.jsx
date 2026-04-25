@@ -643,7 +643,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         req: {
           image_path: selectedImage,
           output_path: outputPath,
-          mirror_horizontal: false,
+          reverse: true,
           threshold: 128,
           invert: true,
           pattern_char_dark: "1",

@@ -21,7 +21,31 @@ export default function ProjectEditor() {
   const [activeTab, setActiveTab] = useState("knitting");
   const [theme, setTheme] = useState("dark-blue");
   const [selectedPatternForKnitting, setSelectedPatternForKnitting] = useState(null);
-
+  const [bounds2D, setBounds2D] = useState({});
+const handleBoundsUpdate = useCallback((partCode, newBounds) => {
+  setBounds2D(prev => {
+    const prevBounds = prev[partCode];
+    
+    // 👇 Сравниваем: если границы не изменились — не обновляем состояние
+    if (prevBounds && 
+        prevBounds.minX === newBounds.minX &&
+        prevBounds.maxX === newBounds.maxX &&
+        prevBounds.minY === newBounds.minY &&
+        prevBounds.maxY === newBounds.maxY) {
+      return prev; // ← тот же объект = нет ре-рендера!
+    }
+    
+    // Иначе обновляем
+    return {
+      ...prev,
+      [partCode]: {
+        ...newBounds,
+        width: newBounds.maxX - newBounds.minX,
+        height: newBounds.maxY - newBounds.minY,
+      }
+    };
+  });
+}, []); // 👈 пустой массив зависимостей = функция не меняется
   // Загрузка темы и применение при изменении
   useEffect(() => {
     const loadAndApplyTheme = async () => {
@@ -207,10 +231,10 @@ export default function ProjectEditor() {
           />
         )}
         {activeTab === "blueprints" && (
-          <BlueprintsTab projectId={project.project_id} />
+          <BlueprintsTab projectId={project.project_id} onBoundsUpdate={handleBoundsUpdate}/>
         )}
         {activeTab === "render" && (
-          <RenderTab projectId={project.project_id} />
+          <RenderTab projectId={project.project_id} bounds2D={bounds2D} />
         )}
         {activeTab === "settings" && (
           <SettingsTab project={project} theme={theme} onThemeChange={handleThemeChange} />

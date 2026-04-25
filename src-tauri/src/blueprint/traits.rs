@@ -66,9 +66,7 @@ pub trait Calculation {
     /// Get all nodes (for SVG rendering)
     fn nodes(&self) -> &Vec<BlueprintNodePosition>;
     
-    fn blueprint_stitch_data(&self) -> &Vec<BlueprintCoord>; // x в петлях
-    
-    fn blueprint_row_data(&self) -> &Vec<BlueprintCoord>; // y в рядах
+    fn blueprint_coords(&self) -> BlueprintWithSeams;
     /// Get mutable reference to nodes
     fn nodes_mut(&mut self) -> &mut Vec<BlueprintNodePosition>;
 

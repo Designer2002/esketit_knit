@@ -34,6 +34,7 @@
   --panel-bg-strong: rgba(255, 255, 255, 0.15);
   --scroll-bg: rgba(255, 255, 255, 0.2);
   --dropdown-bg: #000919;
+    --accent-color: #2eafd6;
   --dropdown-hover-bg: #ffffff;
   --dropdown-hover-text: #1e40af;
   --dropdown-description-color: #2556ac;
@@ -51,6 +52,7 @@
   --btn-bg: #be185d;
   --btn-hover-bg: #9d174d;
   --btn-text: #fce7f3;
+    --accent-color: #d23e94;
   --select-bg: rgba(30, 41, 59, 0.7);
   --panel-bg: rgba(255, 255, 255, 0.1);
   --panel-bg-strong: rgba(255, 255, 255, 0.15);
@@ -73,6 +75,7 @@
   --text-light-color-third: #ca8b73;
   --btn-bg: #fb923c;
   --btn-hover-bg: #f97316;
+    --accent-color: #fff200;
   --btn-text: #5f370e;
   --select-bg: rgba(255, 247, 237, 0.75);
   --panel-bg: rgba(255, 255, 255, 0.35);
@@ -95,6 +98,7 @@
   --text-light-color-second: #acec7b;
   --text-light-color-third: #baf2d7;
   --btn-bg: #22c55e;
+    --accent-color: #0d2e06;
   --btn-hover-bg: #16a34a;
   --btn-text: #064e3b;
   --select-bg: rgba(220, 252, 231, 0.75);
@@ -119,6 +123,7 @@
   --text-light-color-third: #5b3d3d;
   --btn-bg: #ba1f1f;
   --btn-hover-bg: #8b1515;
+    --accent-color: #636363;
   --btn-text: #e9ded8;
   --select-bg: rgba(21, 15, 22, 0.9);
   --panel-bg: rgba(55, 70, 82, 0.4);
@@ -143,6 +148,7 @@
   --btn-bg: #924bef;
   --btn-hover-bg: #6d538f;
   --btn-text: #e9ded8;
+  --accent-color: #7cff70;
   --select-bg: rgba(16, 10, 24, 0.9);
   --panel-bg: rgba(49, 27, 80, 0.4);
   --panel-bg-strong: rgba(71, 41, 112, 0.6);
@@ -163,6 +169,7 @@
   --text-light-color: #78d3d8;
   --text-light-color-second: #95eef4;
   --text-light-color-third: #00b5ae;
+  --accent-color: #710042;
   --btn-bg: #00b5ae;
   --btn-hover-bg: #017c83;
   --btn-text: #ffffff;
