@@ -8,7 +8,7 @@ use tauri::command;
 pub struct ConvertPatternRequest {
     pub image_path: String,
     pub output_path: Option<String>,
-    pub mirror_horizontal: Option<bool>,
+    pub reverse: Option<bool>,
     pub threshold: Option<u8>,
     pub invert: Option<bool>,             // Инвертировать цвета
     pub pattern_char_dark: Option<char>,  // Символ для темных пикселей
@@ -82,7 +82,7 @@ pub async fn convert_image_to_pattern(
     }
 
     // Настройки преобразования
-    let reverse = req.mirror_horizontal.unwrap_or(false);
+    let reverse = req.reverse.unwrap_or(false);
     let threshold = req.threshold.unwrap_or(128);
     let invert = req.invert.unwrap_or(false);
     let dark_char = req.pattern_char_dark.unwrap_or('1');
@@ -142,10 +142,11 @@ fn convert_image_to_pattern_sync(
     let grayscale = img.to_luma8();
     let (width, height) = grayscale.dimensions();
 
+
     // Применяем зеркалирование если нужно
     let processed: ImageBuffer<Luma<u8>, Vec<u8>> = if reverse {
         ImageBuffer::from_fn(width, height, |x, y| {
-            grayscale.get_pixel(width - 1 - x, height - 1 - y).clone()
+            grayscale.get_pixel(height - 1 - x, height - 1 - y).clone()
         })
     } else {
         grayscale
@@ -256,7 +257,7 @@ pub async fn get_image_info(image_path: &str) -> Result<serde_json::Value, Strin
 pub async fn batch_convert_images(
     image_paths: Vec<String>,
     output_dir: String,
-    mirror_horizontal: Option<bool>,
+    reverse: Option<bool>,
     threshold: Option<u8>,
     invert: Option<bool>,
 ) -> Result<Vec<ConvertPatternResponse>, String> {
@@ -281,7 +282,7 @@ pub async fn batch_convert_images(
         let request = ConvertPatternRequest {
             image_path,
             output_path: Some(output_path.to_string_lossy().to_string()),
-            mirror_horizontal,
+            reverse: reverse,
             threshold,
             invert,
             pattern_char_dark: None,

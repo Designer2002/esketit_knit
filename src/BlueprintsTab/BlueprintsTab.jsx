@@ -18,6 +18,12 @@ const DEFAULT_MEASUREMENTS = {
   oz: 16, // обхват запястья
   or: 32, // обхват руки
   di: 62, // длина изделия
+  shoulder_height: 5, // высота плеча (для втачного рукава)
+  shoulder_length: 12, // длина плеча
+  waist_circumference: 70, // обхват талии для приталенного силуэта
+  hip_circumference: 96, // обхват бёдер для приталенного силуэта
+  back_len: 40, //длина от спины до талии для приталенного силуэта
+  hip_len: 20, // длина от талии до линии бёдер для приталенного силуэта
   glg: 8, // глубина горловины
   oh: 58, // обхват головы (= шея в формулах)
   ease: 6, // прибавка на свободу
@@ -89,17 +95,26 @@ const MEASUREMENT_LABELS = {
 };
 
 // ===== MEASUREMENT MODAL =====
-function MeasurementModal({ isOpen, onClose, onSave, initialMeasurements }) {
+function MeasurementModal({
+  isOpen,
+  onClose,
+  onSave,
+  initialMeasurements,
+  sleeveType = "raglan",
+  silhouetteType = "straight",
+}) {
   const [measurements, setMeasurements] = useState({ ...DEFAULT_MEASUREMENTS });
   const { addToast, ToastContainer } = useToast();
 
   useEffect(() => {
-    if (isOpen && initialMeasurements) {
-      setMeasurements({ ...DEFAULT_MEASUREMENTS, ...initialMeasurements });
-    } else if (isOpen) {
-      setMeasurements({ ...DEFAULT_MEASUREMENTS });
+    if (isOpen) {
+      setMeasurements((prev) => ({
+        ...DEFAULT_MEASUREMENTS,
+        ...prev, // сохраняем предыдущие значения из состояния модала
+        ...initialMeasurements, // перезаписываем актуальными с бэкенда
+      }));
     }
-  }, [isOpen, initialMeasurements]);
+  }, [isOpen]);
 
   const handleChange = (key, value) => {
     const num = parseFloat(value);
@@ -182,102 +197,108 @@ function MeasurementModal({ isOpen, onClose, onSave, initialMeasurements }) {
             })}
           </div>
 
-          {/* Set-in sleeve additional measurements */}
-          <div className="measurement-section-divider">
-            <h4>🪡 Дополнительные мерки (для втачного рукава)</h4>
-          </div>
-          <div className="measurements-grid">
-            {["shoulder_height", "shoulder_length"].map((key) => {
-              const labels = {
-                shoulder_height: {
-                  label: "Высота плеча",
-                  unit: "см",
-                  hint: "Обычно 5-6 см",
-                },
-                shoulder_length: {
-                  label: "Длина плеча",
-                  unit: "см",
-                  hint: "От шеи до конца плеча",
-                },
-              };
-              const { label, unit, hint } = labels[key] || {
-                label: key,
-                unit: "см",
-                hint: "",
-              };
-              return (
-                <div key={key} className="measurement-field" title={hint}>
-                  <label>
-                    {label}
-                    {unit && ` (${unit})`}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={measurements[key] ?? ""}
-                    onChange={(e) => handleChange(key, e.target.value)}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          {sleeveType === "set_in" && (
+            <>
+              <div className="measurement-section-divider">
+                <h4>🪡 Дополнительные мерки (для втачного рукава)</h4>
+              </div>
+              <div className="measurements-grid">
+                {["shoulder_height", "shoulder_length"].map((key) => {
+                  const labels = {
+                    shoulder_height: {
+                      label: "Высота плеча",
+                      unit: "см",
+                      hint: "Обычно 5-6 см",
+                    },
+                    shoulder_length: {
+                      label: "Длина плеча",
+                      unit: "см",
+                      hint: "От шеи до конца плеча",
+                    },
+                  };
+                  const { label, unit, hint } = labels[key] || {
+                    label: key,
+                    unit: "см",
+                    hint: "",
+                  };
+                  return (
+                    <div key={key} className="measurement-field" title={hint}>
+                      <label>
+                        {label}
+                        {unit && ` (${unit})`}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={measurements[key] ?? ""}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-          {/* Талия/Бёдра */}
-          <div className="measurement-section-divider">
-            <h4>👗 Талия и бёдра (приталенный силуэт)</h4>
-          </div>
-          <div className="measurements-grid">
-            {[
-              "waist_circumference",
-              "hip_circumference",
-              "back_len",
-              "hip_len",
-            ].map((key) => {
-              const labels = {
-                waist_circumference: {
-                  label: "Обхват талии",
-                  unit: "см",
-                  hint: "По самому узкому месту",
-                },
-                hip_circumference: {
-                  label: "Обхват бёдер",
-                  unit: "см",
-                  hint: "По самым выступающим точкам",
-                },
-                back_len: {
-                  label: "Длина до талии по спинке",
-                  unit: "см",
-                  hint: "От 7-го шейного позвонка до талии",
-                },
-                hip_len: {
-                  label: "Длина до линии бёдер",
-                  unit: "см",
-                  hint: "От талии до линии бёдер (обычно 18-22 см)",
-                },
-              };
-              const { label, unit, hint } = labels[key] || {
-                label: key,
-                unit: "см",
-                hint: "",
-              };
-              return (
-                <div key={key} className="measurement-field" title={hint}>
-                  <label>
-                    {label}
-                    {unit && ` (${unit})`}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={measurements[key] ?? ""}
-                    onChange={(e) => handleChange(key, e.target.value)}
-                  />
-                </div>
-              );
-            })}
-          </div>
+          {silhouetteType === "fitted" && (
+            <>
+              <div className="measurement-section-divider">
+                <h4>👗 Талия и бёдра (приталенный силуэт)</h4>
+              </div>
+              <div className="measurements-grid">
+                {[
+                  "waist_circumference",
+                  "hip_circumference",
+                  "back_len",
+                  "hip_len",
+                ].map((key) => {
+                  const labels = {
+                    waist_circumference: {
+                      label: "Обхват талии",
+                      unit: "см",
+                      hint: "По самому узкому месту",
+                    },
+                    hip_circumference: {
+                      label: "Обхват бёдер",
+                      unit: "см",
+                      hint: "По самым выступающим точкам",
+                    },
+                    back_len: {
+                      label: "Длина до талии по спинке",
+                      unit: "см",
+                      hint: "От 7-го шейного позвонка до талии",
+                    },
+                    hip_len: {
+                      label: "Длина до линии бёдер",
+                      unit: "см",
+                      hint: "От талии до линии бёдер (обычно 18-22 см)",
+                    },
+                  };
+                  const { label, unit, hint } = labels[key] || {
+                    label: key,
+                    unit: "см",
+                    hint: "",
+                  };
+                  return (
+                    <div key={key} className="measurement-field" title={hint}>
+                      <label>
+                        {label}
+                        {unit && ` (${unit})`}
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={measurements[key] ?? ""}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {/* Yarn color picker */}
           <div className="measurements-grid">
@@ -376,7 +397,6 @@ function BlueprintSVG({
   setStampColorPicker,
   onStampColorChange,
 }) {
-  
   const svgRef = useRef(null);
   const [draggingStamp, setDraggingStamp] = useState(null);
   const [stampDragOffset, setStampDragOffset] = useState({ x: 0, y: 0 });
@@ -385,26 +405,33 @@ function BlueprintSVG({
   const vbH = calculation?.viewbox_height || 100;
 
   // Фильтруем узлы только для текущей детали
-  const partNodes = useMemo(() => 
-    nodes.filter((n) => n.part_code === partCode), 
-    [nodes, partCode]
+  const partNodes = useMemo(
+    () => nodes.filter((n) => n.part_code === partCode),
+    [nodes, partCode],
   );
 
   // Рассчитываем 2D границы только для узлов текущей детали
   const bounds = useMemo(() => {
     if (!partNodes || partNodes.length === 0) {
-      console.log(`⚠️ No partNodes for ${partCode}, nodes total:`, nodes?.length);
+      console.log(
+        `⚠️ No partNodes for ${partCode}, nodes total:`,
+        nodes?.length,
+      );
       return null;
     }
-    
+
     const result = {
       minX: Math.min(...partNodes.map((n) => n.x)),
       maxX: Math.max(...partNodes.map((n) => n.x)),
       minY: Math.min(...partNodes.map((n) => n.y)),
       maxY: Math.max(...partNodes.map((n) => n.y)),
     };
-    
-    console.log(`✅ Bounds calculated for ${partCode}:`, result, `from ${partNodes.length} nodes`);
+
+    console.log(
+      `✅ Bounds calculated for ${partCode}:`,
+      result,
+      `from ${partNodes.length} nodes`,
+    );
     return result;
   }, [partNodes, partCode, nodes]);
 
@@ -412,7 +439,7 @@ function BlueprintSVG({
     if (bounds && onBoundsUpdate) {
       onBoundsUpdate(partCode, bounds);
     }
-  }, [bounds, partCode, onBoundsUpdate]); 
+  }, [bounds, partCode, onBoundsUpdate]);
 
   // SVG-based stamp dragging
   const handleStampMouseDown = (e, stampId) => {
@@ -519,7 +546,7 @@ function BlueprintSVG({
     const n = partNodes.find((nd) => nd.node_name === nodeName);
     return n ? { x: n.x, y: n.y } : null;
   };
-if (!calculation)
+  if (!calculation)
     return <div className="no-calculation">Введите мерки для расчёта</div>;
   const getPath = () => {
     // === Helper: get field with fallback for both raglan and set_in ===
@@ -1007,23 +1034,25 @@ if (!calculation)
                   strokeDasharray={isSelected ? "2 1" : "none"}
                 />
                 {/* Pattern cells */}
-                {rows.map((row, ri) =>
-                  row
-                    .split("")
-                    .map((cell, ci) =>
-                      cell === "1" ? (
-                        <rect
-                          key={`cell-${ri}-${ci}`}
-                          x={ci * cellW}
-                          y={ri * cellH}
-                          width={cellW}
-                          height={cellH}
-                          fill={fillColor}
-                          opacity={isSelected ? 0.9 : 0.6}
-                        />
-                      ) : null,
-                    ),
-                )}
+                {[...rows]
+                  .reverse()
+                  .map((row, ri) =>
+                    row
+                      .split("")
+                      .map((cell, ci) =>
+                        cell === "1" ? (
+                          <rect
+                            key={`cell-${ri}-${ci}`}
+                            x={ci * cellW}
+                            y={ri * cellH}
+                            width={cellW}
+                            height={cellH}
+                            fill={fillColor}
+                            opacity={isSelected ? 0.9 : 0.6}
+                          />
+                        ) : null,
+                      ),
+                  )}
                 {/* Horizontal row marker lines at top and bottom of stamp */}
                 <line
                   x1={-2}
@@ -1662,6 +1691,29 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
   });
   // === OOP: Sleeve type determined by garment_type (from project) ===
   const [sleeveType, setSleeveType] = useState("raglan"); // auto-detected from garment_type
+// В BlueprintsTab добавь стейт и загрузку:
+const [silhouetteType, setSilhouetteType] = useState("straight");
+
+useEffect(() => {
+  loadSilhouetteType();
+  // ...остальные загрузки
+}, [projectId]);
+
+const loadSilhouetteType = async () => {
+  try {
+    const type = await invoke("get_project_silhouette_type", { projectId });
+    setSilhouetteType(type);
+  } catch (e) {
+    console.warn("Using default silhouette: straight");
+    setSilhouetteType("straight");
+  }
+};
+
+const saveSilhouetteType = async (type) => {
+  await invoke("save_project_silhouette_type", { projectId, silhouetteType: type });
+  setSilhouetteType(type);
+  // После смены силуэта можно пересчитать, если нужно
+};
 
   useEffect(() => {
     loadSleeveTypeFromProject();
@@ -1751,6 +1803,7 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
     }
   };
 
+
   const saveSleeveType = async (type) => {
     try {
       await invoke("save_project_sleeve_type", { projectId, sleeveType: type });
@@ -1769,10 +1822,16 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
       });
       setCalculation(calc);
       const newNodes = calc.nodes || [];
-      console.log("🔵 Nodes loaded from calculation:", newNodes?.length || 0, "nodes");
+      console.log(
+        "🔵 Nodes loaded from calculation:",
+        newNodes?.length || 0,
+        "nodes",
+      );
       if (newNodes.length > 0) {
         console.log("🔵 First node sample:", newNodes[0]);
-        console.log("🔵 Unique part_codes:", [...new Set(newNodes.map(n => n.part_code))]);
+        console.log("🔵 Unique part_codes:", [
+          ...new Set(newNodes.map((n) => n.part_code)),
+        ]);
       }
       setNodes(newNodes);
     } catch (e) {
@@ -2306,10 +2365,12 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
                           height: rows.length * cellSize,
                         }}
                       >
-                        {rows.map((row, ri) =>
-                          row.split("").map((cell, ci) => (
+                        {/* 🔁 Вертикальный флип: рендерим строки в обратном порядке */}
+                        {[...rows].reverse().map((row, ri) => {
+                          // ri теперь 0 = верх визуального превью, но данные читаем из исходного порядка
+                          return row.split("").map((cell, ci) => (
                             <div
-                              key={`${ri}-${ci}`}
+                              key={`flip-${ri}-${ci}`} // уникальный ключ после реверса
                               style={{
                                 width: cellSize,
                                 height: cellSize,
@@ -2317,8 +2378,8 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
                                   cell === "1" ? "#2196F3" : "transparent",
                               }}
                             />
-                          )),
-                        )}
+                          ));
+                        })}
                       </div>
                       <span className="pattern-tile-name">{p.name}</span>
                     </div>
@@ -2637,6 +2698,8 @@ export default function BlueprintsTab({ projectId, onBoundsUpdate }) {
         onClose={() => setShowMeasurementModal(false)}
         onSave={handleSaveMeasurements}
         initialMeasurements={measurements}
+        sleeveType={sleeveType}
+        silhouetteType={silhouetteType}
       />
 
       {/* Toast notifications */}

@@ -452,6 +452,8 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
           const patternFileName = `pattern_${Date.now()}.swaga`;
           const outputPath = `${projectPath}/patterns/${patternFileName}`;
 
+          //для вязания ряды надо перевернуть, тк в вязании первый ряд - это нижний ряд
+          const reversed_rows = [...pixelatedPreview.rows].reverse();
           const swagaContent = [
             "# swaga Pattern File",
             `# width=${pixelatedPreview.width}`,
@@ -464,7 +466,7 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
             `# saturation=${saturation}`,
             `# source=${sourceImageInfo?.path || "unknown"}`,
             "# end_header",
-            ...pixelatedPreview.rows,
+            ...reversed_rows,
           ].join("\n");
 
           await invoke("create_dir", { path: `${projectPath}/patterns` }).catch(() => {});
@@ -488,7 +490,7 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
               pattern_type: "pixel_art",
               width: pixelatedPreview.width,
               height: pixelatedPreview.height,
-              pattern_data: pixelatedPreview.rows.join("\n"),
+              pattern_data: reversed_rows.join("\n"),
               category: "converted",
               source: sourceImageInfo?.path || "",
             }});

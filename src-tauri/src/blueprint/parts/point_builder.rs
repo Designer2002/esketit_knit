@@ -63,6 +63,8 @@ pub fn build_neck_pts(
     // Сначала прямой участок (rem_rows)
     cy += rem_rows as f64 * sy;
     pts.push((cx, cy));
+
+    println!("decreases: {:?}", decreases);
     
     // Потом убавки горловины (в обратном порядке - от центра к плечу)
     for dg in decreases.iter().rev() {
@@ -80,7 +82,7 @@ pub fn build_neck_pts(
             pts.push((cx, cy));
         }
     }
-    
+    println!("Neck points: {:?}", pts);
     pts
 }
 

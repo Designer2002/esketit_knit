@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import Sweater3DPreview from "../Sweater3D/Sweater3D";
 import "./RenderTab.css";
 
-// 🔹 Вычисляем 2D-границы прямо здесь, чтобы не зависеть от BlueprintsTab
 function buildBounds2D(nodes) {
   const grouped = {};
   nodes.forEach((n) => {
@@ -26,6 +25,8 @@ function adaptMeasurementsArray(meas) {
   if (!Array.isArray(meas)) return meas || {};
   return meas.reduce((acc, item) => {
     if (item?.key && item?.value !== undefined) acc[item.key] = item.value;
+    // 🔹 Ловим yarn_color, если он пришел в массиве мерок (в поле note)
+    if (item?.key === "yarn_color" && item?.note) acc.yarn_color = item.note;
     return acc;
   }, {});
 }
@@ -50,7 +51,7 @@ function normalizeMeasurement(value, min, max, defaultValue = 0) {
   return (clamped - min) / (max - min);
 }
 
-export default function RenderTab({ projectId }) { // 🔹 убрали bounds2D из пропсов
+export default function RenderTab({ projectId }) {
   const [calculation, setCalculation] = useState(null);
   const [sleeveType, setSleeveType] = useState("raglan");
   const [loading, setLoading] = useState(true);
@@ -58,7 +59,6 @@ export default function RenderTab({ projectId }) { // 🔹 убрали bounds2D
   const [patternStamps, setPatternStamps] = useState([]);
   const [rawMeasurements, setRawMeasurements] = useState(null);
 
-  // 🔹 Вычисляем bounds2D локально из загруженных узлов
   const bounds2D = useMemo(() => {
     if (calculation?.nodes) return buildBounds2D(calculation.nodes);
     return {};
@@ -98,19 +98,50 @@ export default function RenderTab({ projectId }) { // 🔹 убрали bounds2D
         invoke("get_patterns_for_project", { projectId }).catch(() => []),
         invoke("get_project_blueprint_measurements", { projectId }).catch(() => null),
       ]);
+      
       setSleeveType(type);
       setCalculation(calc);
       setPatternStamps(stamps);
       setRawMeasurements(adaptMeasurementsArray(meas));
+
+      // 🚨 СУПЕР-ЛОГГИРОВАНИЕ ДЛЯ ОТЛАДКИ 🚨
+      console.group("🛠️ RenderTab: Данные успешно загружены");
+      console.log("1. Sleeve Type:", type);
+      console.log("2. Узлов (nodes) всего:", calc?.nodes?.length);
+      console.log("3. Границы (bounds2D):", buildBounds2D(calc?.nodes || []));
+      
+      console.group("4. Штампы (stamps) - ИЩЕМ ТУТ ПРОБЛЕМУ");
+      console.table(stamps); // Удобная таблица в консоли
+      stamps.forEach(s => {
+         if (!s.pattern_data) {
+            console.warn(`❌ У штампа ${s.id} (часть: ${s.part_code}) НЕТ pattern_data! Он будет невидимым в 3D.`);
+         }
+      });
+      console.groupEnd();
+
+      console.group("5. Мерки (measurements)");
+      console.log("Raw:", meas);
+      console.log("Adapted:", adaptMeasurementsArray(meas));
+      console.groupEnd();
+      console.groupEnd();
+
     } catch (e) {
-      console.error("Failed to load data:", e);
-      setError("Не удалось загрузить данные для рендера");
+      console.error("💥 Ошибка загрузки данных:", e);
+      setError("Не удалось загрузить данные для рендера: " + e);
     } finally {
       setLoading(false);
     }
   };
 
   const yarnColor = rawMeasurements?.yarn_color || localStorage.getItem(`yarn_color_${projectId}`) || "#c77d9e";
+
+  // Логируем то, что уходит конкретно в 3D компонент
+  useEffect(() => {
+    if (!loading && patternStamps.length > 0) {
+       console.log("🧩 Передаем в <Sweater3DPreview> stamps:", patternStamps);
+       console.log("🧩 Передаем в <Sweater3DPreview> bounds2D:", bounds2D);
+    }
+  }, [loading, patternStamps, bounds2D]);
 
   return (
     <div className="render-tab">
@@ -128,10 +159,10 @@ export default function RenderTab({ projectId }) { // 🔹 убрали bounds2D
                 initialMeasurements={measurements3D}
                 yarnColor={yarnColor}
                 scaleFactor={2}
-                offsetY={-70}
+                offsetY={-90}
                 textureUrl="/textures/knit_3d.jpg"
                 stamps={patternStamps}
-                bounds2D={bounds2D} // 🔹 теперь всегда есть данные
+                bounds2D={bounds2D}
                 height={500}
                 autoRotate={true}
               />

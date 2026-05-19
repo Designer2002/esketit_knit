@@ -222,9 +222,35 @@ fn gen_sleeve_increases(total: i32, height: i32) -> Vec<i32> {
     if total <= 0 || height <= 0 {
         return rows;
     }
-    let interval = ((height as f64 / total as f64) * 0.7).round().max(4.0) as i32;
-    for i in 0..total {
-        rows.push(((i + 1) * interval).min(height - 2));
+
+    let min_interval = 4;
+    let total_increases = total.min(height / min_interval);
+    if total_increases <= 0 {
+        return rows;
+    }
+
+    let remaining_rows = height - min_interval * total_increases;
+    let extra_per_step = remaining_rows / total_increases;
+    let remainder = remaining_rows % total_increases;
+
+    let mut current = 0;
+    for i in 0..total_increases {
+        let interval = min_interval + extra_per_step + if i < remainder { 1 } else { 0 };
+        current += interval;
+        rows.push(current.min(height - 2));
     }
     rows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gen_sleeve_increases_spreads_fully_to_body_height() {
+        let rows = gen_sleeve_increases(27, 149);
+        assert_eq!(rows.len(), 27);
+        assert_eq!(*rows.last().unwrap(), 147);
+        assert!(rows.windows(2).all(|w| w[0] < w[1]));
+    }
 }

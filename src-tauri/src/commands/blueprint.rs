@@ -87,10 +87,79 @@ pub async fn save_blueprint_measurement(req: SaveBlueprintMeasurementRequest, po
         .execute(pool.inner()).await.map_err(|e| format!("Failed to save measurement: {}", e))?;
     Ok(result.last_insert_rowid())
 }
+// ===== НОВЫЙ КОМАНД: Возвращает мерки как JSON-объект =====
 #[command]
-pub async fn get_project_blueprint_measurements(project_id: i64, pool: tauri::State<'_, SqlitePool>) -> Result<Vec<BlueprintMeasurement>, String> {
-    let rows = sqlx::query("SELECT * FROM project_blueprint_measurements WHERE project_id = ?").bind(project_id).fetch_all(pool.inner()).await.map_err(|e| format!("Failed to fetch measurements: {}", e))?;
-    Ok(rows.iter().map(|r| BlueprintMeasurement::from(r)).collect())
+pub async fn get_project_blueprint_measurements(
+    project_id: i64, 
+    pool: tauri::State<'_, SqlitePool>
+) -> Result<serde_json::Value, String> {
+    let rows = sqlx::query(
+        "SELECT measurement_code, value, note FROM project_blueprint_measurements WHERE project_id = ?"
+    )
+    .bind(project_id)
+    .fetch_all(pool.inner())
+    .await
+    .map_err(|e| format!("Failed to fetch measurements: {}", e))?;
+
+    let mut map = serde_json::Map::new();
+    
+    for row in rows {
+        let code: String = row.get("measurement_code");
+        let value: f64 = row.get("value");
+        let note: Option<String> = row.get("note");
+        
+        // 🔹 Особая обработка yarn_color (хранится в note)
+        if code == "yarn_color" {
+            if let Some(color) = note {
+                map.insert(code, serde_json::Value::String(color));
+            }
+        } else {
+            map.insert(code, serde_json::Value::from(value));
+        }
+    }
+    
+    Ok(serde_json::Value::Object(map))
+}
+
+// ===== GET/SET silhouette_type =====
+#[command]
+pub async fn get_project_silhouette_type(
+    project_id: i64,
+    pool: tauri::State<'_, SqlitePool>
+) -> Result<String, String> {
+    let silhouette: Option<String> = sqlx::query_scalar(
+        "SELECT silhouette_type FROM projects WHERE id = ?"
+    )
+    .bind(project_id)
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(|e| format!("Failed to get silhouette: {}", e))?;
+    
+    Ok(silhouette.unwrap_or_else(|| "straight".to_string()))
+}
+
+#[command]
+pub async fn save_project_silhouette_type(
+    project_id: i64,
+    silhouette_type: String,
+    pool: tauri::State<'_, SqlitePool>
+) -> Result<(), String> {
+    // Валидация
+    if !["straight", "fitted"].contains(&silhouette_type.as_str()) {
+        return Err("Invalid silhouette_type. Use 'straight' or 'fitted'".into());
+    }
+    
+    sqlx::query(
+        "INSERT INTO projects (id, silhouette_type) VALUES (?, ?)
+         ON CONFLICT(id) DO UPDATE SET silhouette_type = excluded.silhouette_type"
+    )
+    .bind(project_id)
+    .bind(&silhouette_type)
+    .execute(pool.inner())
+    .await
+    .map_err(|e| format!("Failed to save silhouette: {}", e))?;
+    
+    Ok(())
 }
 #[command]
 pub async fn update_blueprint_node(project_id: i64, node_name: String, x: f64, y: f64, pool: tauri::State<'_, SqlitePool>) -> Result<(), String> {

@@ -6,7 +6,11 @@ import "../Toast/Toast.css";
 import ImageConverter from "../ImageConverter/ImageConverter";
 import "./PatternsTab.css";
 
-export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern }) {
+export default function PatternsTab({
+  projectId,
+  garmentTypeId,
+  onSelectPattern,
+}) {
   const { addToast, ToastContainer } = useToast();
   const [patterns, setPatterns] = useState([]);
   const [invertedPatternId, setInvertedPatternId] = useState(null);
@@ -23,7 +27,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
 
   // Режим выбора файла для импорта
   const [importMode, setImportMode] = useState(false);
-  
+
   // Режим конвертера
   const [useNewConverter, setUseNewConverter] = useState(true);
 
@@ -31,7 +35,13 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
 
   // Хелперы для уведомлений (заглушки, используем addToast)
   const showAlert = (message, type = "info") => addToast(message, type);
-  const showConfirm = ({ title, message, onConfirm, confirmText = "Да", cancelText = "Нет" }) => {
+  const showConfirm = ({
+    title,
+    message,
+    onConfirm,
+    confirmText = "Да",
+    cancelText = "Нет",
+  }) => {
     // Для confirm используем window.confirm
     if (window.confirm(`${title}\n\n${message}`)) {
       onConfirm?.();
@@ -46,12 +56,17 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
     if (!canvas) return;
 
     // Загружаем сохранённые цвета из localStorage
-    const savedColors = localStorage.getItem('patternColors');
-    const colors = savedColors ? JSON.parse(savedColors) : { dark: "#1e40af", light: "#e5e7eb" };
+    const savedColors = localStorage.getItem("patternColors");
+    const colors = savedColors
+      ? JSON.parse(savedColors)
+      : { dark: "#1e40af", light: "#e5e7eb" };
 
     const ctx = canvas.getContext("2d");
     const maxCanvasSize = 500;
-    const cellSize = Math.max(2, Math.min(12, Math.floor(maxCanvasSize / Math.max(width, height))));
+    const cellSize = Math.max(
+      2,
+      Math.min(12, Math.floor(maxCanvasSize / Math.max(width, height))),
+    );
 
     canvas.width = width * cellSize;
     canvas.height = height * cellSize;
@@ -61,21 +76,30 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Отрисовка каждого пикселя с использованием сохранённых цветов
+    // Отрисовка каждого пикселя с вертикальным флипом (только по Y)
     for (let y = 0; y < rows.length; y++) {
-      const row = rows[y];
+      // 🔁 Инвертируем индекс строки: 0 → последняя, height-1 → первая
+      const visualY = rows.length - 1 - y;
+      const row = rows[visualY];
+
       for (let x = 0; x < row.length; x++) {
-        if (row[x] === true || row[x] === 1 || row[x] === "1" || row[x] === "#") {
+        if (
+          row[x] === true ||
+          row[x] === 1 ||
+          row[x] === "1" ||
+          row[x] === "#"
+        ) {
           // Тёмный пиксель (узор)
           ctx.fillStyle = colors.dark;
         } else {
           // Светлый пиксель (фон)
           ctx.fillStyle = colors.light;
         }
+        // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     }
-    
+
     // Добавляем сетку для наглядности
     ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
     ctx.lineWidth = 1;
@@ -100,18 +124,21 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       console.log("🔄 Загрузка проекта, projectId:", projectId);
       try {
         const projectData = await invoke("open_project_by_id", {
-          projectId: parseInt(projectId)
+          projectId: parseInt(projectId),
         });
 
         console.log("✅ Проект загружен:", projectData);
         console.log("📁 file_path:", projectData.file_path);
-        
+
         if (!projectData.file_path) {
           console.warn("⚠️ file_path пустой!");
-          showAlert("У проекта не указан путь к файлу. Создайте проект заново.", "warning");
+          showAlert(
+            "У проекта не указан путь к файлу. Создайте проект заново.",
+            "warning",
+          );
           return;
         }
-        
+
         setProjectPath(projectData.file_path);
 
         // Загружаем тему
@@ -135,7 +162,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       loadProjectAndPatterns();
     }
   }, [projectId]);
-  
+
   // Отрисовка превью при выборе паттерна
   useEffect(() => {
     if (selectedPattern && selectedPattern.pattern_data && canvasRef.current) {
@@ -144,7 +171,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
         drawPatternPreview(
           selectedPattern.pattern_data,
           selectedPattern.width,
-          selectedPattern.height
+          selectedPattern.height,
         );
       }, 50);
     }
@@ -159,7 +186,9 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
         const entries = await invoke("read_dir", { path: patternsDir });
 
         const patternFiles = entries.filter(
-          entry => !entry.is_dir && (entry.name.endsWith('.swaga') || entry.name.endsWith('.txt'))
+          (entry) =>
+            !entry.is_dir &&
+            (entry.name.endsWith(".swaga") || entry.name.endsWith(".txt")),
         );
 
         const loadedPatterns = await Promise.all(
@@ -168,10 +197,10 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
             const content = await invoke("read_file_text", { path: filePath });
             const parsed = parsePatternFile(content, file.name, filePath);
             return parsed;
-          })
+          }),
         );
 
-        setPatterns(loadedPatterns.filter(p => p !== null));
+        setPatterns(loadedPatterns.filter((p) => p !== null));
       } catch (error) {
         console.log("Patterns directory does not exist yet");
         setPatterns([]);
@@ -184,20 +213,23 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
 
   // Парсинг файла узора
   const parsePatternFile = (content, fileName, filePath) => {
-    const lines = content.split('\n').filter(line => line.trim() !== '');
+    const lines = content.split("\n").filter((line) => line.trim() !== "");
 
     let metadata = {};
     let patternLines = [];
     let inHeader = true;
 
     for (const line of lines) {
-      if (line.startsWith('#')) {
+      if (line.startsWith("#")) {
         if (inHeader) {
-          if (line.includes('=')) {
-            const [key, value] = line.substring(1).split('=').map(s => s.trim());
+          if (line.includes("=")) {
+            const [key, value] = line
+              .substring(1)
+              .split("=")
+              .map((s) => s.trim());
             metadata[key] = value;
           }
-          if (line.includes('# end_header')) {
+          if (line.includes("# end_header")) {
             inHeader = false;
           }
         }
@@ -207,19 +239,21 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
     }
 
     if (patternLines.length === 0 && lines.length > 0) {
-      patternLines = lines.filter(line => !line.startsWith('#')).map(line => line.trim());
+      patternLines = lines
+        .filter((line) => !line.startsWith("#"))
+        .map((line) => line.trim());
     }
 
     const height = patternLines.length;
     const width = patternLines.length > 0 ? patternLines[0].length : 0;
 
-    const rows = patternLines.map(line =>
-      line.split('').map(char => char === '1' || char === '#')
+    const rows = patternLines.map((line) =>
+      line.split("").map((char) => char === "1" || char === "#"),
     );
 
     return {
       id: fileName,
-      name: fileName.replace(/\.(swaga|txt)$/, ''),
+      name: fileName.replace(/\.(swaga|txt)$/, ""),
       width,
       height,
       file_path: filePath,
@@ -232,20 +266,28 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
   const handleSelectFile = async () => {
     try {
       const selected = await open({
-        title: importMode ? "Выберите файл узора (.swaga или .txt)" : "Выберите изображение для конвертации",
+        title: importMode
+          ? "Выберите файл узора (.swaga или .txt)"
+          : "Выберите изображение для конвертации",
         multiple: false,
-        filters: importMode ? [{
-          name: "Pattern Files",
-          extensions: ["swaga", "txt"]
-        }] : [{
-          name: "Images",
-          extensions: ["png", "jpg", "jpeg", "bmp", "gif"]
-        }]
+        filters: importMode
+          ? [
+              {
+                name: "Pattern Files",
+                extensions: ["swaga", "txt"],
+              },
+            ]
+          : [
+              {
+                name: "Images",
+                extensions: ["png", "jpg", "jpeg", "bmp", "gif"],
+              },
+            ],
       });
 
       if (selected) {
         if (importMode) {
-          if (selected.endsWith('.swaga') || selected.endsWith('.txt')) {
+          if (selected.endsWith(".swaga") || selected.endsWith(".txt")) {
             setImportSourceFile(selected);
           } else {
             showAlert("Выберите файл .swaga или .txt для импорта", "warning");
@@ -272,7 +314,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       }
 
       const invertedRows = pattern.pattern_data.map((row) =>
-        row.map((cell) => !cell)
+        row.map((cell) => !cell),
       );
 
       // Save inverted pattern to file
@@ -288,7 +330,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
         prev.map((p) => {
           if (p.id !== pattern.id) return p;
           return { ...p, pattern_data: invertedRows };
-        })
+        }),
       );
 
       // Update selected pattern
@@ -329,7 +371,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
           invert: false,
           pattern_char_dark: "1",
           pattern_char_light: "0",
-        }
+        },
       });
 
       if (!result.success) {
@@ -339,7 +381,6 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       setConversionResult(result);
       await loadPatterns(projectPath);
       showAlert("Узор успешно создан!", "success");
-
     } catch (error) {
       console.error("Conversion failed:", error);
       showAlert(`Ошибка конвертации: ${error.message}`, "error");
@@ -358,16 +399,16 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
 
     showConfirm({
       title: "Импортировать узор?",
-      message: `Скопировать "${importSourceFile.split('/').pop()}" в папку patterns проекта?`,
+      message: `Скопировать "${importSourceFile.split("/").pop()}" в папку patterns проекта?`,
       confirmText: "Импортировать",
       onConfirm: async () => {
         try {
-          const fileName = importSourceFile.split('/').pop();
+          const fileName = importSourceFile.split("/").pop();
           const destPath = `${projectPath}/patterns/${fileName}`;
 
           await invoke("copy_file", {
             from: importSourceFile,
-            to: destPath
+            to: destPath,
           });
 
           showAlert(`Узор "${fileName}" импортирован!`, "success");
@@ -380,7 +421,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       },
       onCancel: () => {
         setImportSourceFile(null);
-      }
+      },
     });
   };
 
@@ -405,45 +446,55 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
         } catch (error) {
           showAlert(`Ошибка удаления: ${error.message}`, "error");
         }
-      }
+      },
     });
   };
 
- 
-  
   // Создание мини-превью для карточки (возвращает data URL)
   const createMiniPreview = useCallback((rows, width, height, size = 60) => {
-    if (!rows || rows.length === 0) return '';
-    
+    if (!rows || rows.length === 0) return "";
+
     // Загружаем сохранённые цвета из localStorage
-    const savedColors = localStorage.getItem('patternColors');
-    const colors = savedColors ? JSON.parse(savedColors) : { dark: "#1e40af", light: "#e5e7eb" };
-    
-    const miniCanvas = document.createElement('canvas');
+    const savedColors = localStorage.getItem("patternColors");
+    const colors = savedColors
+      ? JSON.parse(savedColors)
+      : { dark: "#1e40af", light: "#e5e7eb" };
+
+    const miniCanvas = document.createElement("canvas");
     const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
     miniCanvas.width = Math.max(1, width * cellSize);
     miniCanvas.height = Math.max(1, height * cellSize);
-    
-    const ctx = miniCanvas.getContext('2d');
+
+    const ctx = miniCanvas.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-    
+
+    // Отрисовка каждого пикселя с вертикальным флипом (только по Y)
     for (let y = 0; y < rows.length; y++) {
-      const row = rows[y];
+      // 🔁 Инвертируем индекс строки: 0 → последняя, height-1 → первая
+      const visualY = rows.length - 1 - y;
+      const row = rows[visualY];
+
       for (let x = 0; x < row.length; x++) {
-        if (row[x] === true || row[x] === 1 || row[x] === "1" || row[x] === "#") {
+        if (
+          row[x] === true ||
+          row[x] === 1 ||
+          row[x] === "1" ||
+          row[x] === "#"
+        ) {
+          // Тёмный пиксель (узор)
           ctx.fillStyle = colors.dark;
         } else {
+          // Светлый пиксель (фон)
           ctx.fillStyle = colors.light;
         }
+        // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
       }
     }
-    
-    return miniCanvas.toDataURL('image/png');
+
+    return miniCanvas.toDataURL("image/png");
   }, []);
-  
-  
 
   return (
     <div className="patterns-tab">
@@ -467,7 +518,9 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
           </>
         ) : (
           <div className="import-mode-toolbar">
-            <span className="import-mode-label">📁 Режим импорта: выберите файл .swaga или .txt</span>
+            <span className="import-mode-label">
+              📁 Режим импорта: выберите файл .swaga или .txt
+            </span>
             <button
               className="btn-confirm-import"
               onClick={handleImportPattern}
@@ -475,10 +528,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
             >
               ✅ Импортировать
             </button>
-            <button
-              className="btn-cancel-import"
-              onClick={handleCancelImport}
-            >
+            <button className="btn-cancel-import" onClick={handleCancelImport}>
               ✕ Отмена
             </button>
           </div>
@@ -486,14 +536,17 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
       </div>
 
       {/* Новый конвертер */}
-      {useNewConverter && (
-        projectPath ? (
+      {useNewConverter &&
+        (projectPath ? (
           <ImageConverter
             projectPath={projectPath}
             projectId={projectId}
             onPatternCreated={(pattern) => {
               loadPatterns(projectPath);
-              showAlert(`Узор "${pattern.name}" создан и добавлен в галерею!`, "success");
+              showAlert(
+                `Узор "${pattern.name}" создан и добавлен в галерею!`,
+                "success",
+              );
             }}
           />
         ) : (
@@ -501,8 +554,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
             <div className="loading-spinner"></div>
             <p>Загрузка проекта...</p>
           </div>
-        )
-      )}
+        ))}
 
       {/* Two columns layout */}
       <div className={`patterns-layout ${useNewConverter ? "hidden" : ""}`}>
@@ -524,14 +576,18 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
 
           {importMode && importSourceFile && (
             <div className="selected-file-info">
-              <span className="file-path">📄 {importSourceFile.split('/').pop()}</span>
+              <span className="file-path">
+                📄 {importSourceFile.split("/").pop()}
+              </span>
               <span className="file-hint">Готов к импорту</span>
             </div>
           )}
 
           {!importMode && patternFile && (
             <div className="selected-file-info">
-              <span className="file-path">📄 {patternFile.split('/').pop()}</span>
+              <span className="file-path">
+                📄 {patternFile.split("/").pop()}
+              </span>
               <button
                 className="btn-convert"
                 onClick={handleConvertImage}
@@ -562,7 +618,7 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
               patterns.map((pattern) => (
                 <div
                   key={pattern.id}
-                  className={`pattern-card ${selectedPattern?.id === pattern.id ? 'selected' : ''}`}
+                  className={`pattern-card ${selectedPattern?.id === pattern.id ? "selected" : ""}`}
                   onClick={() => {
                     setSelectedPattern(pattern);
                   }}
@@ -570,7 +626,12 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
                   <div className="pattern-preview">
                     {pattern.pattern_data ? (
                       <img
-                        src={createMiniPreview(pattern.pattern_data, pattern.width, pattern.height, 60)}
+                        src={createMiniPreview(
+                          pattern.pattern_data,
+                          pattern.width,
+                          pattern.height,
+                          60,
+                        )}
                         alt={pattern.name}
                         className="mini-pattern-preview"
                       />
@@ -580,9 +641,11 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
                   </div>
                   <div className="pattern-info">
                     <h4>{pattern.name}</h4>
-                    <span className="pattern-size">{pattern.width}×{pattern.height}</span>
+                    <span className="pattern-size">
+                      {pattern.width}×{pattern.height}
+                    </span>
                     <span className="pattern-format">
-                      {pattern.file_path.endsWith('.swaga') ? '.swaga' : '.txt'}
+                      {pattern.file_path.endsWith(".swaga") ? ".swaga" : ".txt"}
                     </span>
                   </div>
                   <div className="pattern-actions">
@@ -617,9 +680,23 @@ export default function PatternsTab({ projectId, garmentTypeId, onSelectPattern 
             <div className="pattern-detail-panel">
               <h4>📋 {selectedPattern.name}</h4>
               <div className="pattern-info-grid">
-                <span>📐 Размер: <strong>{selectedPattern.width}×{selectedPattern.height}</strong></span>
-                <span>📄 Формат: <strong>{selectedPattern.file_path.endsWith('.swaga') ? '.swaga' : '.txt'}</strong></span>
-                <span>📁 Путь: <strong>{selectedPattern.file_path}</strong></span>
+                <span>
+                  📐 Размер:{" "}
+                  <strong>
+                    {selectedPattern.width}×{selectedPattern.height}
+                  </strong>
+                </span>
+                <span>
+                  📄 Формат:{" "}
+                  <strong>
+                    {selectedPattern.file_path.endsWith(".swaga")
+                      ? ".swaga"
+                      : ".txt"}
+                  </strong>
+                </span>
+                <span>
+                  📁 Путь: <strong>{selectedPattern.file_path}</strong>
+                </span>
               </div>
               <div className="pattern-canvas-wrapper">
                 <canvas ref={canvasRef} className="pattern-canvas" />

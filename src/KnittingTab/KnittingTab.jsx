@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./KnittingTab.css";
-import esp_connect from "../assets/sounds/esp_connect.mp3"
-import knit_complete from "../assets/sounds/knit_complete.mp3"
+import esp_connect from "../assets/sounds/esp_connect.mp3";
+import knit_complete from "../assets/sounds/knit_complete.mp3";
 
-export default function KnittingTab({ projectId, garmentTypeId, selectedPatternFromPatterns, onSelectPatternFromGallery }) {
+export default function KnittingTab({
+  projectId,
+  garmentTypeId,
+  selectedPatternFromPatterns,
+  onSelectPatternFromGallery,
+}) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [patternData, setPatternData] = useState(null);
   const [converting, setConverting] = useState(false);
@@ -13,22 +18,24 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   const [projectPath, setProjectPath] = useState(null);
   const [patterns, setPatterns] = useState([]);
   const [showPatternGallery, setShowPatternGallery] = useState(false);
-  
+
   // Настройки цветов паттерна
   const [patternColors, setPatternColors] = useState(() => {
     // Загружаем сохранённые цвета из localStorage
-    const saved = localStorage.getItem('patternColors');
-    return saved ? JSON.parse(saved) : {
-      dark: "#1e40af",
-      light: "#e5e7eb",
-    };
+    const saved = localStorage.getItem("patternColors");
+    return saved
+      ? JSON.parse(saved)
+      : {
+          dark: "#1e40af",
+          light: "#e5e7eb",
+        };
   });
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [previewKey, setPreviewKey] = useState(0); // Для принудительной перерисовки canvas
-  
+
   // Сохранение цветов при изменении
   useEffect(() => {
-    localStorage.setItem('patternColors', JSON.stringify(patternColors));
+    localStorage.setItem("patternColors", JSON.stringify(patternColors));
   }, [patternColors]);
 
   // HTTP сервер
@@ -51,31 +58,61 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   const statusIntervalRef = useRef(null);
   const hasShownCompletionNotification = useRef(false); // Чтобы показать уведомление только один раз
   const hasPlayedConnectSound = useRef(false); // Чтобы звук подключения сыграл только один раз
-  
+
   // Toast уведомления
   const [toasts, setToasts] = useState([]);
-  
+
   // Звуки
   const connectSoundRef = useRef(null);
   const completeSoundRef = useRef(null);
-  
+
   // Сохранённый прогресс вязания
   const [savedProgress, setSavedProgress] = useState(null);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   // Modal
   const [modal, setModal] = useState({
-    isOpen: false, title: "", message: "", type: "info",
-    onConfirm: null, onCancel: null, showCancel: false,
-    confirmText: "OK", cancelText: "Отмена",
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info",
+    onConfirm: null,
+    onCancel: null,
+    showCancel: false,
+    confirmText: "OK",
+    cancelText: "Отмена",
   });
 
   const previewCanvasRef = useRef(null);
 
-  const showModal = ({ title, message, type = "info", onConfirm, onCancel, showCancel = false, confirmText = "OK", cancelText = "Отмена" }) => {
-    setModal({ isOpen: true, title, message, type, onConfirm, onCancel, showCancel, confirmText, cancelText });
+  const showModal = ({
+    title,
+    message,
+    type = "info",
+    onConfirm,
+    onCancel,
+    showCancel = false,
+    confirmText = "OK",
+    cancelText = "Отмена",
+  }) => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm,
+      onCancel,
+      showCancel,
+      confirmText,
+      cancelText,
+    });
   };
   const showAlert = (message, type = "info") => {
-    showModal({ title: type === "error" ? "Ошибка" : type === "success" ? "Успех" : "Внимание", message, type });
+    showModal({
+      title:
+        type === "error" ? "Ошибка" : type === "success" ? "Успех" : "Внимание",
+      message,
+      type,
+    });
   };
 
   // Получение IP компьютера при загрузке
@@ -97,7 +134,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
     // Звук подключения ESP
     connectSoundRef.current = new Audio(esp_connect);
     connectSoundRef.current.volume = 0.5;
-    
+
     // Звук завершения вязания
     completeSoundRef.current = new Audio(knit_complete);
     completeSoundRef.current.volume = 0.7;
@@ -106,10 +143,10 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   // Функция добавления toast-уведомления
   const addToast = useCallback((message, type = "info", duration = 4000) => {
     const id = `knitting-toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setToasts(prev => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type }]);
 
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts((prev) => prev.filter((t) => t.id !== id));
     }, duration);
   }, []);
 
@@ -117,7 +154,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   const playSound = useCallback((soundRef) => {
     if (soundRef && soundRef.current) {
       soundRef.current.currentTime = 0;
-      soundRef.current.play().catch(e => console.log("Sound play error:", e));
+      soundRef.current.play().catch((e) => console.log("Sound play error:", e));
     }
   }, []);
 
@@ -131,122 +168,152 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   }, [patternData, httpServer.running]);
 
   // Отрисовка паттерна на canvas
-  const drawPatternPreview = useCallback((rows, width, height, currentRow = 0, direction = "right") => {
-    console.log("🎨 drawPatternPreview called:", { rows: rows?.length, width, height, currentRow, direction });
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      console.warn("⚠️ canvasRef.current is null!");
-      return;
-    }
-    if (!rows || rows.length === 0) {
-      console.warn("⚠️ rows is empty!");
-      return;
-    }
-
-    const ctx = canvas.getContext("2d");
-    const maxCanvasSize = 400;
-
-    // Рассчитываем размер ячейки так, чтобы паттерн влезал в canvas
-    const cellSize = Math.max(1, Math.floor(maxCanvasSize / Math.max(width, height)));
-    console.log("📐 cellSize:", cellSize, "canvas:", width * cellSize, "x", height * cellSize);
-
-    // Устанавливаем размер canvas по размеру паттерна
-    canvas.width = Math.min(width * cellSize, maxCanvasSize);
-    canvas.height = Math.min(height * cellSize, maxCanvasSize);
-
-    // Очистка
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Рассчитываем видимую область для больших паттернов
-    const visibleWidth = Math.floor(canvas.width / cellSize);
-    const visibleHeight = Math.floor(canvas.height / cellSize);
-    const startX = Math.max(0, Math.floor((width - visibleWidth) / 2));
-    const startY = Math.max(0, Math.floor((height - visibleHeight) / 2));
-
-    console.log("🔍 Drawing", visibleWidth, "x", visibleHeight, "pixels from", startX, startY);
-
-    // Отрисовка рядов с использованием выбранных цветов
-    let pixelsDrawn = 0;
-    for (let y = 0; y < visibleHeight && (startY + y) < height; y++) {
-      const row = rows[startY + y];
-      if (!row) continue; // Пропускаем если ряд не существует
-      for (let x = 0; x < visibleWidth && (startX + x) < width; x++) {
-        const pixelIndex = startX + x;
-        if (row[pixelIndex]) {
-          // Тёмный пиксель (узор) - используем выбранный цвет
-          ctx.fillStyle = patternColors.dark;
-        } else {
-          // Светлый пиксель (фон) - используем выбранный цвет
-          ctx.fillStyle = patternColors.light;
-        }
-        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-        pixelsDrawn++;
+  const drawPatternPreview = useCallback(
+    (rows, width, height, currentRow = 0, direction = "right") => {
+      console.log("🎨 drawPatternPreview called:", {
+        rows: rows?.length,
+        width,
+        height,
+        currentRow,
+        direction,
+      });
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        console.warn("⚠️ canvasRef.current is null!");
+        return;
       }
-    }
+      if (!rows || rows.length === 0) {
+        console.warn("⚠️ rows is empty!");
+        return;
+      }
 
-    console.log("✅ Drew", pixelsDrawn, "pixels");
+      const ctx = canvas.getContext("2d");
+      const maxCanvasSize = 400;
 
-    // Подсветка текущей позиции с направлением
-    if (currentRow > 0) {
-      const adjustedRow = currentRow - startY;
-      const yPos = adjustedRow * cellSize;
+      // Рассчитываем размер ячейки так, чтобы паттерн влезал в canvas
+      const cellSize = Math.max(
+        1,
+        Math.floor(maxCanvasSize / Math.max(width, height)),
+      );
+      console.log(
+        "📐 cellSize:",
+        cellSize,
+        "canvas:",
+        width * cellSize,
+        "x",
+        height * cellSize,
+      );
 
-      if (yPos >= 0 && yPos <= canvas.height) {
-        // Цвет линии зависит от направления
-        ctx.strokeStyle = direction === "right" ? "#22c55e" : "#3b82f6";
-        ctx.lineWidth = 3;
+      // Устанавливаем размер canvas по размеру паттерна
+      canvas.width = Math.min(width * cellSize, maxCanvasSize);
+      canvas.height = Math.min(height * cellSize, maxCanvasSize);
 
-        // Рисуем линию
-        ctx.beginPath();
-        ctx.moveTo(0, yPos);
-        ctx.lineTo(canvas.width, yPos);
-        ctx.stroke();
+      // Очистка
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Рисуем стрелку направления
-        const arrowSize = 10;
-        ctx.fillStyle = direction === "right" ? "#22c55e" : "#3b82f6";
+      // Рассчитываем видимую область для больших паттернов
+      const visibleWidth = Math.floor(canvas.width / cellSize);
+      const visibleHeight = Math.floor(canvas.height / cellSize);
+      const startX = Math.max(0, Math.floor((width - visibleWidth) / 2));
+      const startY = Math.max(0, Math.floor((height - visibleHeight) / 2));
 
-        if (direction === "right") {
-          // Стрелка вправо
-          ctx.beginPath();
-          ctx.moveTo(canvas.width - 5, yPos);
-          ctx.lineTo(canvas.width - 5 - arrowSize, yPos - arrowSize / 2);
-          ctx.lineTo(canvas.width - 5 - arrowSize, yPos + arrowSize / 2);
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          // Стрелка влево
-          ctx.beginPath();
-          ctx.moveTo(5, yPos);
-          ctx.lineTo(5 + arrowSize, yPos - arrowSize / 2);
-          ctx.lineTo(5 + arrowSize, yPos + arrowSize / 2);
-          ctx.closePath();
-          ctx.fill();
+      console.log(
+        "🔍 Drawing",
+        visibleWidth,
+        "x",
+        visibleHeight,
+        "pixels from",
+        startX,
+        startY,
+      );
+
+      // Отрисовка рядов с вертикальным флипом для превью
+      let pixelsDrawn = 0;
+      for (let y = 0; y < visibleHeight && startY + y < height; y++) {
+        // Инвертируем индекс ряда: 0 → последний, height-1 → первый
+        const visualY = height - 1 - (startY + y);
+        const row = rows[visualY];
+        if (!row) continue;
+
+        for (let x = 0; x < visibleWidth && startX + x < width; x++) {
+          const pixelIndex = startX + x;
+          if (row[pixelIndex]) {
+            ctx.fillStyle = patternColors.dark;
+          } else {
+            ctx.fillStyle = patternColors.light;
+          }
+          // Y рисуем как есть — canvas уже рисует сверху вниз, а мы инвертировали источник
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+          pixelsDrawn++;
         }
+      }
 
-        // Текст с номером ряда
-        ctx.fillStyle = "#000";
-        ctx.font = "bold 11px sans-serif";
+      console.log("✅ Drew", pixelsDrawn, "pixels");
+
+      // Подсветка текущей позиции с направлением
+      if (currentRow > 0) {
+        const visualRow = height - currentRow;
+        const adjustedRow = visualRow - startY;
+        const yPos = adjustedRow * cellSize;
+
+        if (yPos >= 0 && yPos <= canvas.height) {
+          // Цвет линии зависит от направления
+          ctx.strokeStyle = direction === "right" ? "#22c55e" : "#3b82f6";
+          ctx.lineWidth = 3;
+
+          // Рисуем линию
+          ctx.beginPath();
+          ctx.moveTo(0, yPos);
+          ctx.lineTo(canvas.width, yPos);
+          ctx.stroke();
+
+          // Рисуем стрелку направления
+          const arrowSize = 10;
+          ctx.fillStyle = direction === "right" ? "#22c55e" : "#3b82f6";
+
+          if (direction === "right") {
+            // Стрелка вправо
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - 5, yPos);
+            ctx.lineTo(canvas.width - 5 - arrowSize, yPos - arrowSize / 2);
+            ctx.lineTo(canvas.width - 5 - arrowSize, yPos + arrowSize / 2);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            // Стрелка влево
+            ctx.beginPath();
+            ctx.moveTo(5, yPos);
+            ctx.lineTo(5 + arrowSize, yPos - arrowSize / 2);
+            ctx.lineTo(5 + arrowSize, yPos + arrowSize / 2);
+            ctx.closePath();
+            ctx.fill();
+          }
+
+          // Текст с номером ряда
+          ctx.fillStyle = "#000";
+          ctx.font = "bold 11px sans-serif";
+          ctx.fillText(
+            `Ряд ${visualRow} ${direction === "right" ? "→" : "←"}`,
+            5,
+            yPos - 5,
+          );
+        }
+      }
+
+      // Добавляем информацию о масштабе для больших паттернов
+      if (width > visibleWidth || height > visibleHeight) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.font = "12px sans-serif";
         ctx.fillText(
-          `Ряд ${currentRow} ${direction === "right" ? "→" : "←"}`,
+          `Показано: ${visibleWidth}×${visibleHeight} из ${width}×${height}`,
           5,
-          yPos - 5
+          canvas.height - 5,
         );
       }
-    }
-
-    // Добавляем информацию о масштабе для больших паттернов
-    if (width > visibleWidth || height > visibleHeight) {
-      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      ctx.font = "12px sans-serif";
-      ctx.fillText(
-        `Показано: ${visibleWidth}×${visibleHeight} из ${width}×${height}`,
-        5,
-        canvas.height - 5
-      );
-    }
-  }, [patternColors]);
+    },
+    [patternColors],
+  );
 
   // Ключ для localStorage (уникальный для каждого проекта)
   const getProgressKey = useCallback(() => {
@@ -256,15 +323,17 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   // Загрузка сохранённого прогресса при монтировании
   useEffect(() => {
     if (!projectId || !patternData) return;
-    
+
     const key = getProgressKey();
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
         const progress = JSON.parse(saved);
         // Проверяем что прогресс актуален (тот же проект и тот же узор)
-        if (progress.patternWidth === patternData.width &&
-            progress.patternHeight === patternData.height) {
+        if (
+          progress.patternWidth === patternData.width &&
+          progress.patternHeight === patternData.height
+        ) {
           setSavedProgress(progress);
           console.log("📂 Найден сохранённый прогресс:", progress);
         } else {
@@ -301,18 +370,45 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
     localStorage.setItem(key, JSON.stringify(progress));
     setSavedProgress(progress);
 
-    addToast(`💾 Прогресс сохранён! Ряд ${progress.currentRow}/${progress.totalRows}`, "success", 4000);
+    addToast(
+      `💾 Прогресс сохранён! Ряд ${progress.currentRow}/${progress.totalRows}`,
+      "success",
+      4000,
+    );
     console.log("💾 Прогресс сохранён:", progress);
-  }, [patternData, httpServer.running, httpServer.currentRow, httpServer.currentDirection, httpServer.maxSentRow, httpServer.totalRows, getProgressKey, addToast, showAlert]);
- const showConfirm = useCallback(({
-    title, message, onConfirm, onCancel,
-    confirmText = "Да", cancelText = "Нет"
-  }) => {
-    showModal({
-      title, message, type: "confirm", onConfirm, onCancel,
-      showCancel: true, confirmText, cancelText
-    });
-  }, [showModal]);
+  }, [
+    patternData,
+    httpServer.running,
+    httpServer.currentRow,
+    httpServer.currentDirection,
+    httpServer.maxSentRow,
+    httpServer.totalRows,
+    getProgressKey,
+    addToast,
+    showAlert,
+  ]);
+  const showConfirm = useCallback(
+    ({
+      title,
+      message,
+      onConfirm,
+      onCancel,
+      confirmText = "Да",
+      cancelText = "Нет",
+    }) => {
+      showModal({
+        title,
+        message,
+        type: "confirm",
+        onConfirm,
+        onCancel,
+        showCancel: true,
+        confirmText,
+        cancelText,
+      });
+    },
+    [showModal],
+  );
   // Восстановить прогресс
   const restoreProgress = useCallback(() => {
     if (!savedProgress) {
@@ -328,14 +424,16 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       onConfirm: async () => {
         try {
           // Обновляем локальное состояние
-          setHttpServer(prev => ({
+          setHttpServer((prev) => ({
             ...prev,
             running: true,
             currentRow: savedProgress.currentRow,
             currentDirection: savedProgress.currentDirection,
             maxSentRow: savedProgress.maxSentRow,
             totalRows: savedProgress.totalRows,
-            progressPercent: Math.round((savedProgress.currentRow / savedProgress.totalRows) * 100),
+            progressPercent: Math.round(
+              (savedProgress.currentRow / savedProgress.totalRows) * 100,
+            ),
             serverIp: computerIp,
           }));
 
@@ -346,7 +444,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
               patternData.width,
               patternData.height,
               savedProgress.currentRow,
-              savedProgress.currentDirection
+              savedProgress.currentDirection,
             );
           }
 
@@ -361,13 +459,13 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             // Если сервер не запустился из-за занятого порта, пробуем перезапустить
             if (err.message && err.message.includes("Address already in use")) {
               console.log("🔄 Порт занят, пробуем перезапустить сервер...");
-              
+
               // Останавливаем старый сервер
               await invoke("stop_esp32_http_server").catch(() => {});
-              
+
               // Ждём немного
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+
               // Пробуем снова
               return await invoke("start_esp32_http_server", {
                 patternRows: patternData.rows,
@@ -390,20 +488,38 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             maxSentRow: savedProgress.maxSentRow,
           });
 
-          console.log("🔄 Прогресс восстановлен на сервере: ряд", savedProgress.currentRow);
+          console.log(
+            "🔄 Прогресс восстановлен на сервере: ряд",
+            savedProgress.currentRow,
+          );
 
           // Запускаем опрос статуса
           startStatusPolling();
 
-          addToast(`Прогресс восстановлен! Ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`, "success", 5000);
+          addToast(
+            `Прогресс восстановлен! Ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`,
+            "success",
+            5000,
+          );
           setShowRestorePrompt(false);
         } catch (error) {
           console.error("Ошибка восстановления прогресса:", error);
-          showAlert(`Ошибка восстановления: ${error.message || error}`, "error");
+          showAlert(
+            `Ошибка восстановления: ${error.message || error}`,
+            "error",
+          );
         }
       },
     });
-  }, [savedProgress, patternData, drawPatternPreview, addToast, showAlert, showConfirm, computerIp]);
+  }, [
+    savedProgress,
+    patternData,
+    drawPatternPreview,
+    addToast,
+    showAlert,
+    showConfirm,
+    computerIp,
+  ]);
 
   // Удалить сохранённый прогресс
   const deleteSavedProgress = useCallback(() => {
@@ -434,7 +550,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
           console.log("🔄 Прогресс сбролен:", resetData);
 
           // Обновляем локальное состояние
-          setHttpServer(prev => ({
+          setHttpServer((prev) => ({
             ...prev,
             currentRow: 0,
             currentDirection: "right",
@@ -453,12 +569,21 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             await invoke("send_esp_restart_signal");
             console.log("🔄 ESP restart signal sent after progress reset");
           } catch (e) {
-            console.log("ESP restart signal not sent (server may not be running):", e);
+            console.log(
+              "ESP restart signal not sent (server may not be running):",
+              e,
+            );
           }
 
           // Перерисовываем превью
           if (patternData) {
-            drawPatternPreview(patternData.rows, patternData.width, patternData.height, 0, "right");
+            drawPatternPreview(
+              patternData.rows,
+              patternData.width,
+              patternData.height,
+              0,
+              "right",
+            );
           }
 
           addToast("Прогресс сброшен! Начинаем сначала.", "warning", 5000);
@@ -468,40 +593,56 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         }
       },
     });
-  }, [httpServer.running, httpServer.currentRow, httpServer.totalRows, patternData, drawPatternPreview, getProgressKey, addToast, showAlert, showConfirm]);
+  }, [
+    httpServer.running,
+    httpServer.currentRow,
+    httpServer.totalRows,
+    patternData,
+    drawPatternPreview,
+    getProgressKey,
+    addToast,
+    showAlert,
+    showConfirm,
+  ]);
 
   // Загрузка темы
   useEffect(() => {
-    invoke("get_theme").then(setTheme).catch(() => {});
+    invoke("get_theme")
+      .then(setTheme)
+      .catch(() => {});
   }, []);
-  
+
   // Загрузка проекта и узоров
   useEffect(() => {
     const loadProjectAndPatterns = async () => {
       try {
         const projectData = await invoke("open_project_by_id", {
-          projectId: parseInt(projectId)
+          projectId: parseInt(projectId),
         });
         setProjectPath(projectData.file_path);
-        
+
         // Загружаем узоры из папки patterns
         const patternsDir = `${projectData.file_path}/patterns`;
         try {
           const entries = await invoke("read_dir", { path: patternsDir });
           const patternFiles = entries.filter(
-            entry => !entry.is_dir && (entry.name.endsWith('.swaga') || entry.name.endsWith('.txt'))
+            (entry) =>
+              !entry.is_dir &&
+              (entry.name.endsWith(".swaga") || entry.name.endsWith(".txt")),
           );
-          
+
           const loadedPatterns = await Promise.all(
             patternFiles.map(async (file) => {
               const filePath = `${patternsDir}/${file.name}`;
-              const content = await invoke("read_file_text", { path: filePath });
+              const content = await invoke("read_file_text", {
+                path: filePath,
+              });
               const parsed = parsePatternFile(content, file.name, filePath);
               return parsed;
-            })
+            }),
           );
-          
-          setPatterns(loadedPatterns.filter(p => p !== null));
+
+          setPatterns(loadedPatterns.filter((p) => p !== null));
         } catch (error) {
           console.log("Patterns directory does not exist yet");
           setPatterns([]);
@@ -515,10 +656,13 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       loadProjectAndPatterns();
     }
   }, [projectId]);
-  
+
   // Обработка выбранного узора из PatternsTab
   useEffect(() => {
-    if (selectedPatternFromPatterns && selectedPatternFromPatterns.pattern_data) {
+    if (
+      selectedPatternFromPatterns &&
+      selectedPatternFromPatterns.pattern_data
+    ) {
       const pattern = selectedPatternFromPatterns;
       const rows = pattern.pattern_data;
       const width = pattern.width;
@@ -532,24 +676,26 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       }, 50);
     }
   }, [selectedPatternFromPatterns, drawPatternPreview]);
-  
 
   // Парсинг файла узора
   const parsePatternFile = (content, fileName, filePath) => {
-    const lines = content.split('\n').filter(line => line.trim() !== '');
-    
+    const lines = content.split("\n").filter((line) => line.trim() !== "");
+
     let metadata = {};
     let patternLines = [];
     let inHeader = true;
-    
+
     for (const line of lines) {
-      if (line.startsWith('#')) {
+      if (line.startsWith("#")) {
         if (inHeader) {
-          if (line.includes('=')) {
-            const [key, value] = line.substring(1).split('=').map(s => s.trim());
+          if (line.includes("=")) {
+            const [key, value] = line
+              .substring(1)
+              .split("=")
+              .map((s) => s.trim());
             metadata[key] = value;
           }
-          if (line.includes('# end_header')) {
+          if (line.includes("# end_header")) {
             inHeader = false;
           }
         }
@@ -557,21 +703,23 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         patternLines.push(line.trim());
       }
     }
-    
+
     if (patternLines.length === 0 && lines.length > 0) {
-      patternLines = lines.filter(line => !line.startsWith('#')).map(line => line.trim());
+      patternLines = lines
+        .filter((line) => !line.startsWith("#"))
+        .map((line) => line.trim());
     }
-    
+
     const height = patternLines.length;
     const width = patternLines.length > 0 ? patternLines[0].length : 0;
-    
-    const rows = patternLines.map(line =>
-      line.split('').map(char => char === '1' || char === '#')
+
+    const rows = patternLines.map((line) =>
+      line.split("").map((char) => char === "1" || char === "#"),
     );
-    
+
     return {
       id: fileName,
-      name: fileName.replace(/\.(swaga|txt)$/, ''),
+      name: fileName.replace(/\.(swaga|txt)$/, ""),
       width,
       height,
       file_path: filePath,
@@ -579,13 +727,13 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       metadata,
     };
   };
-  
+
   // Выбор узора из галереи
   const handleSelectPatternFromGallery = (pattern) => {
     const rows = pattern.pattern_data;
     const width = pattern.width;
     const height = pattern.height;
-    
+
     setPatternData({ rows, width, height, format: "from_gallery" });
     setShowPatternGallery(false);
 
@@ -605,10 +753,12 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       const selected = await open({
         title: "Выберите изображение для узора",
         multiple: false,
-        filters: [{
-          name: "Images",
-          extensions: ["png", "jpg", "jpeg", "bmp", "gif"]
-        }]
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "bmp", "gif"],
+          },
+        ],
       });
 
       if (selected) {
@@ -631,14 +781,13 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
       // Получаем путь к папке проекта
       const projectData = await invoke("open_project_by_id", {
-        projectId: parseInt(projectId)
+        projectId: parseInt(projectId),
       });
 
       const projectFolderPath = projectData.file_path;
       const patternFileName = `pattern_${Date.now()}.swaga`;
       const outputPath = `${projectFolderPath}/patterns/${patternFileName}`;
 
-      
       const result = await invoke("convert_image_to_pattern", {
         req: {
           image_path: selectedImage,
@@ -648,7 +797,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
           invert: true,
           pattern_char_dark: "1",
           pattern_char_light: "0",
-        }
+        },
       });
 
       if (!result.success) {
@@ -656,8 +805,8 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       }
 
       // Парсим результат
-      const rows = result.preview_lines.map(line =>
-        line.split('').map(char => char === "1")
+      const rows = result.preview_lines.map((line) =>
+        line.split("").map((char) => char === "1"),
       );
 
       const width = result.width;
@@ -668,7 +817,6 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
       // Рисуем превью
       drawPatternPreview(rows, width, height, 0, "right");
-
     } catch (err) {
       console.error("Conversion failed:", err);
       setError(err.message || "Не удалось конвертировать изображение");
@@ -677,23 +825,29 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
     }
   };
 
-  
   // Запуск HTTP сервера
   const startHttpServer = async () => {
     if (!patternData) return;
 
     // Проверяем наличие узоров на выкройке и показываем подсказку про датчики
     try {
-      const stamps = await invoke("get_blueprint_pattern_stamps", { projectId }).catch(() => []);
+      const stamps = await invoke("get_blueprint_pattern_stamps", {
+        projectId,
+      }).catch(() => []);
       if (stamps && stamps.length > 0) {
         // Находим самый широкий узор в выкройке
-        const widestStamp = stamps.reduce((max, s) => s.width > max.width ? s : max, stamps[0]);
-        const patternName = stamps.find(s => s.id === widestStamp.pattern_id)?.name || '#' + widestStamp.pattern_id;
+        const widestStamp = stamps.reduce(
+          (max, s) => (s.width > max.width ? s : max),
+          stamps[0],
+        );
+        const patternName =
+          stamps.find((s) => s.id === widestStamp.pattern_id)?.name ||
+          "#" + widestStamp.pattern_id;
         // Добавляем toast через существующую систему
         addToast(
           `📐 Датчики: выставьте на ширину самого широкого узора — ${widestStamp.width} п. (${patternName}). Вязание по ${patternData.width} п.`,
           "info",
-          8000
+          8000,
         );
       }
     } catch (e) {
@@ -704,18 +858,18 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
     // Показываем модалку с подтверждением
     const confirmStart = window.confirm(
       "🧶 Начать вязание?\n\n" +
-      "Убедитесь, что:\n" +
-      "• ESP32 включен и подключён к WiFi\n" +
-      `• IP адрес ESP32 настроен на: ${computerIp}\n` +
-      "• Нить заправлена в машину\n\n" +
-      "Нажмите OK для запуска или Отмена для отмены."
+        "Убедитесь, что:\n" +
+        "• ESP32 включен и подключён к WiFi\n" +
+        `• IP адрес ESP32 настроен на: ${computerIp}\n` +
+        "• Нить заправлена в машину\n\n" +
+        "Нажмите OK для запуска или Отмена для отмены.",
     );
 
     if (!confirmStart) return;
 
     try {
       // Сбрасываем прогресс перед новым запуском
-      setHttpServer(prev => ({
+      setHttpServer((prev) => ({
         ...prev,
         currentRow: 0,
         progressPercent: 0,
@@ -733,13 +887,13 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         // Если сервер не запустился из-за занятого порта, пробуем перезапустить
         if (err.message && err.message.includes("Address already in use")) {
           console.log("🔄 Порт занят, пробуем перезапустить сервер...");
-          
+
           // Останавливаем старый сервер
           await invoke("stop_esp32_http_server").catch(() => {});
-          
+
           // Ждём немного
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
           // Пробуем снова
           return await invoke("start_esp32_http_server", {
             patternRows: patternData.rows,
@@ -754,7 +908,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
       console.log("HTTP server started:", result);
 
-      setHttpServer(prev => ({
+      setHttpServer((prev) => ({
         ...prev,
         running: true,
         serverIp: computerIp,
@@ -763,7 +917,6 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
       // Запускаем опрос статуса
       startStatusPolling();
-
     } catch (err) {
       console.error("Failed to start HTTP server:", err);
       setError(err.message || "Не удалось запустить сервер");
@@ -775,7 +928,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
   const stopHttpServer = async () => {
     try {
       await invoke("stop_esp32_http_server");
-      setHttpServer(prev => ({ ...prev, running: false }));
+      setHttpServer((prev) => ({ ...prev, running: false }));
       stopStatusPolling();
       // Сбрасываем флаг чтобы при следующем запуске уведомление снова показалось
       hasShownCompletionNotification.current = false;
@@ -809,7 +962,9 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
         // Check for blueprint pattern stamp width changes
         try {
-          const stamps = await invoke("get_blueprint_pattern_stamps", { projectId }).catch(() => []);
+          const stamps = await invoke("get_blueprint_pattern_stamps", {
+            projectId,
+          }).catch(() => []);
           if (stamps && stamps.length > 0) {
             // Find which stamp (if any) covers the current row
             // Convert knitting row to SVG y coordinate
@@ -828,11 +983,14 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
               if (lastStampPatternId !== currentStamp.pattern_id) {
                 // New pattern started
                 lastStampPatternId = currentStamp.pattern_id;
-                if (lastPatternWidth !== 0 && lastPatternWidth !== currentStamp.width) {
+                if (
+                  lastPatternWidth !== 0 &&
+                  lastPatternWidth !== currentStamp.width
+                ) {
                   addToast(
                     `📐 Датчики: ширина узора изменилась с ${lastPatternWidth} на ${currentStamp.width} п.`,
                     "warning",
-                    5000
+                    5000,
                   );
                 }
                 lastPatternWidth = currentStamp.width;
@@ -862,7 +1020,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             playSound(connectSoundRef);
           }
 
-          setHttpServer(prev => ({
+          setHttpServer((prev) => ({
             ...prev,
             running: true,
             currentRow: current,
@@ -877,17 +1035,31 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
 
           // Обновляем canvas с новой позицией
           if (patternData) {
-            drawPatternPreview(patternData.rows, patternData.width, patternData.height, current, direction);
+            drawPatternPreview(
+              patternData.rows,
+              patternData.width,
+              patternData.height,
+              current,
+              direction,
+            );
           }
 
           // Проверяем завершение вязания (ряд >= total)
-          if (current >= total && total > 0 && !hasShownCompletionNotification.current) {
+          if (
+            current >= total &&
+            total > 0 &&
+            !hasShownCompletionNotification.current
+          ) {
             hasShownCompletionNotification.current = true;
             console.log("✅ Вязание завершено!");
-            
+
             // Показываем toast-уведомление
-            addToast(`Вязание завершено! Все ${total} рядов связаны!`, "success", 8000);
-            
+            addToast(
+              `Вязание завершено! Все ${total} рядов связаны!`,
+              "success",
+              8000,
+            );
+
             // Играем звук завершения
             playSound(completeSoundRef);
           }
@@ -922,40 +1094,48 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         patternData.width,
         patternData.height,
         httpServer.currentRow,
-        httpServer.currentDirection
+        httpServer.currentDirection,
       );
     }
-  }, [httpServer.currentRow, httpServer.currentDirection, patternData, drawPatternPreview]);
+  }, [
+    httpServer.currentRow,
+    httpServer.currentDirection,
+    patternData,
+    drawPatternPreview,
+  ]);
 
   // Перерисовка при появлении patternData (когда узор выбран)
   useEffect(() => {
-    console.log("🎨 patternData useEffect:", patternData ? `${patternData.width}x${patternData.height}` : "null");
+    console.log(
+      "🎨 patternData useEffect:",
+      patternData ? `${patternData.width}x${patternData.height}` : "null",
+    );
     console.log("🖼️ canvasRef.current:", canvasRef.current);
-    
+
     if (!patternData) {
       console.log("⚠️ patternData is null, skipping");
       return;
     }
-    
+
     // Небольшая задержка чтобы DOM успел обновиться
     const timer = setTimeout(() => {
       console.log("🎨 setTimeout callback, canvasRef:", canvasRef.current);
-      
+
       if (!canvasRef.current) {
         console.warn("⚠️ canvasRef.current is still null after timeout!");
         return;
       }
-      
+
       console.log("🎨 Drawing preview...");
       drawPatternPreview(
         patternData.rows,
         patternData.width,
         patternData.height,
         httpServer.currentRow,
-        httpServer.currentDirection
+        httpServer.currentDirection,
       );
     }, 200);
-    
+
     return () => clearTimeout(timer);
   }, [patternData]);
 
@@ -967,45 +1147,61 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         patternData.width,
         patternData.height,
         httpServer.currentRow,
-        httpServer.currentDirection
+        httpServer.currentDirection,
       );
     }
-  }, [patternColors, patternData, drawPatternPreview, httpServer.currentRow, httpServer.currentDirection]);
-  
+  }, [
+    patternColors,
+    patternData,
+    drawPatternPreview,
+    httpServer.currentRow,
+    httpServer.currentDirection,
+  ]);
+
   // Создание мини-превью для галереи
-  const createMiniPreview = useCallback((rows, width, height, size = 60) => {
-    if (!rows || rows.length === 0) return '';
+const createMiniPreview = useCallback((rows, width, height, size = 60) => {
+  if (!rows || rows.length === 0) return '';
+  
+  const miniCanvas = document.createElement('canvas');
+  const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
+  miniCanvas.width = Math.max(1, width * cellSize);
+  miniCanvas.height = Math.max(1, height * cellSize);
+  
+  const ctx = miniCanvas.getContext('2d');
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+  
+  // 🔁 Вертикальный флип: рисуем строки в обратном порядке
+  for (let y = 0; y < rows.length; y++) {
+    // Инвертируем индекс: 0 → последняя строка, height-1 → первая
+    const visualY = height - 1 - y;
+    const row = rows[visualY];
     
-    const miniCanvas = document.createElement('canvas');
-    const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
-    miniCanvas.width = Math.max(1, width * cellSize);
-    miniCanvas.height = Math.max(1, height * cellSize);
-    
-    const ctx = miniCanvas.getContext('2d');
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-    
-    for (let y = 0; y < rows.length; y++) {
-      const row = rows[y];
-      for (let x = 0; x < row.length; x++) {
-        if (row[x] === true || row[x] === 1 || row[x] === "1" || row[x] === "#") {
-          ctx.fillStyle = patternColors.dark;
-        } else {
-          ctx.fillStyle = patternColors.light;
-        }
-        ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+    for (let x = 0; x < row.length; x++) {
+      if (
+        row[x] === true ||
+        row[x] === 1 ||
+        row[x] === "1" ||
+        row[x] === "#"
+      ) {
+        ctx.fillStyle = patternColors.dark;
+      } else {
+        ctx.fillStyle = patternColors.light;
       }
+      // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
+      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
     }
-    
-    return miniCanvas.toDataURL('image/png');
-  }, [patternColors]);
+  }
+  
+  return miniCanvas.toDataURL('image/png');
+}, [patternColors]);
 
   return (
     <div className="knitting-tab">
       {/* Выбор узора из галереи */}
       <div className="pattern-gallery-selection">
         <h4>🧶 Выберите узор для вязания</h4>
-        
+
         {!showPatternGallery ? (
           <button
             className="btn-open-gallery"
@@ -1035,23 +1231,30 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
                 patterns.map((pattern) => (
                   <div
                     key={pattern.id}
-                    className={`gallery-pattern-card ${patternData?.width === pattern.width && patternData?.height === pattern.height ? 'selected' : ''}`}
+                    className={`gallery-pattern-card ${patternData?.width === pattern.width && patternData?.height === pattern.height ? "selected" : ""}`}
                     onClick={() => handleSelectPatternFromGallery(pattern)}
                   >
                     <div className="pattern-preview">
-                                        {pattern.pattern_data ? (
-                                          <img
-                                            src={createMiniPreview(pattern.pattern_data, pattern.width, pattern.height, 60)}
-                                            alt={pattern.name}
-                                            className="mini-pattern-preview"
-                                          />
-                                        ) : (
-                                          <span className="pattern-placeholder">🧶</span>
-                                        )}
-                                      </div>
+                      {pattern.pattern_data ? (
+                        <img
+                          src={createMiniPreview(
+                            pattern.pattern_data,
+                            pattern.width,
+                            pattern.height,
+                            60,
+                          )}
+                          alt={pattern.name}
+                          className="mini-pattern-preview"
+                        />
+                      ) : (
+                        <span className="pattern-placeholder">🧶</span>
+                      )}
+                    </div>
                     <div className="gallery-pattern-info">
                       <h6>{pattern.name}</h6>
-                      <span className="gallery-pattern-size">{pattern.width}×{pattern.height}</span>
+                      <span className="gallery-pattern-size">
+                        {pattern.width}×{pattern.height}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -1059,11 +1262,16 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             </div>
           </div>
         )}
-        
+
         {patternData && !showPatternGallery && (
           <div className="selected-pattern-info">
             <span className="selected-pattern-name">
-              ✅ Выбран узор: <strong>{patternData.format === "from_patterns" ? selectedPatternFromPatterns?.name : 'Из галереи'}</strong>
+              ✅ Выбран узор:{" "}
+              <strong>
+                {patternData.format === "from_patterns"
+                  ? selectedPatternFromPatterns?.name
+                  : "Из галереи"}
+              </strong>
             </span>
             <span className="selected-pattern-size">
               📐 Размер: {patternData.width}×{patternData.height}
@@ -1163,9 +1371,26 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             <span className="progress-title">Сохранённый прогресс</span>
           </div>
           <div className="progress-details">
-            <span>Ряд: <strong>{savedProgress.currentRow}/{savedProgress.totalRows}</strong></span>
-            <span>Направление: <strong>{savedProgress.currentDirection === "right" ? "→ вправо" : "← влево"}</strong></span>
-            <span>Сохранено: <strong>{new Date(savedProgress.savedAt).toLocaleString("ru-RU")}</strong></span>
+            <span>
+              Ряд:{" "}
+              <strong>
+                {savedProgress.currentRow}/{savedProgress.totalRows}
+              </strong>
+            </span>
+            <span>
+              Направление:{" "}
+              <strong>
+                {savedProgress.currentDirection === "right"
+                  ? "→ вправо"
+                  : "← влево"}
+              </strong>
+            </span>
+            <span>
+              Сохранено:{" "}
+              <strong>
+                {new Date(savedProgress.savedAt).toLocaleString("ru-RU")}
+              </strong>
+            </span>
           </div>
         </div>
       )}
@@ -1181,13 +1406,23 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
                 <input
                   type="color"
                   value={patternColors.dark}
-                  onChange={(e) => setPatternColors(prev => ({ ...prev, dark: e.target.value }))}
+                  onChange={(e) =>
+                    setPatternColors((prev) => ({
+                      ...prev,
+                      dark: e.target.value,
+                    }))
+                  }
                   className="color-picker-input"
                 />
                 <input
                   type="text"
                   value={patternColors.dark}
-                  onChange={(e) => setPatternColors(prev => ({ ...prev, dark: e.target.value }))}
+                  onChange={(e) =>
+                    setPatternColors((prev) => ({
+                      ...prev,
+                      dark: e.target.value,
+                    }))
+                  }
                   className="color-text-input"
                   placeholder="#000000"
                 />
@@ -1199,13 +1434,23 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
                 <input
                   type="color"
                   value={patternColors.light}
-                  onChange={(e) => setPatternColors(prev => ({ ...prev, light: e.target.value }))}
+                  onChange={(e) =>
+                    setPatternColors((prev) => ({
+                      ...prev,
+                      light: e.target.value,
+                    }))
+                  }
                   className="color-picker-input"
                 />
                 <input
                   type="text"
                   value={patternColors.light}
-                  onChange={(e) => setPatternColors(prev => ({ ...prev, light: e.target.value }))}
+                  onChange={(e) =>
+                    setPatternColors((prev) => ({
+                      ...prev,
+                      light: e.target.value,
+                    }))
+                  }
                   className="color-text-input"
                   placeholder="#FFFFFF"
                 />
@@ -1214,19 +1459,39 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             <div className="color-picker-presets">
               <span className="preset-label">Предустановки:</span>
               <div className="preset-buttons">
-                <button onClick={() => setPatternColors({ dark: "#1e40af", light: "#e5e7eb" })}>
+                <button
+                  onClick={() =>
+                    setPatternColors({ dark: "#1e40af", light: "#e5e7eb" })
+                  }
+                >
                   🔵 Синий
                 </button>
-                <button onClick={() => setPatternColors({ dark: "#000000", light: "#ffffff" })}>
+                <button
+                  onClick={() =>
+                    setPatternColors({ dark: "#000000", light: "#ffffff" })
+                  }
+                >
                   ⚫ Ч/Б
                 </button>
-                <button onClick={() => setPatternColors({ dark: "#dc2626", light: "#fef3c7" })}>
+                <button
+                  onClick={() =>
+                    setPatternColors({ dark: "#dc2626", light: "#fef3c7" })
+                  }
+                >
                   🔴 Красный
                 </button>
-                <button onClick={() => setPatternColors({ dark: "#059669", light: "#d1fae5" })}>
+                <button
+                  onClick={() =>
+                    setPatternColors({ dark: "#059669", light: "#d1fae5" })
+                  }
+                >
                   🟢 Зелёный
                 </button>
-                <button onClick={() => setPatternColors({ dark: "#7c3aed", light: "#ede9fe" })}>
+                <button
+                  onClick={() =>
+                    setPatternColors({ dark: "#7c3aed", light: "#ede9fe" })
+                  }
+                >
                   🟣 Фиолетовый
                 </button>
               </div>
@@ -1241,8 +1506,9 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
           <div className="info-icon">🧶</div>
           <h4>Готово к вязанию!</h4>
           <p>
-            <strong>Узор загружен:</strong> {patternData.width}×{patternData.height}
-            ({Math.ceil(patternData.height / 4)} чанков по 4 ряда)
+            <strong>Узор загружен:</strong> {patternData.width}×
+            {patternData.height}({Math.ceil(patternData.height / 4)} чанков по 4
+            ряда)
           </p>
           <div className="steps">
             <div className="step">
@@ -1255,7 +1521,9 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
             </div>
             <div className="step">
               <span className="step-number">3</span>
-              <span>Нажмите <strong>▶️ НАЧАТЬ ВЯЗАНИЕ</strong></span>
+              <span>
+                Нажмите <strong>▶️ НАЧАТЬ ВЯЗАНИЕ</strong>
+              </span>
             </div>
           </div>
           <p className="hint">
@@ -1269,10 +1537,23 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         <div className="pattern-info-panel">
           <h4>📋 Информация об узоре</h4>
           <div className="info-grid">
-            <span>📐 Размер: <strong>{patternData.width}×{patternData.height}</strong></span>
-            <span>📄 Формат: <strong>Бинарный (0/1)</strong></span>
-            <span>🧶 Чанков: <strong>{Math.ceil(patternData.height / 4)}</strong> (по 4 ряда)</span>
-            <span>🔗 ESP32 IP: <strong>{httpServer.serverIp || computerIp}:6666</strong></span>
+            <span>
+              📐 Размер:{" "}
+              <strong>
+                {patternData.width}×{patternData.height}
+              </strong>
+            </span>
+            <span>
+              📄 Формат: <strong>Бинарный (0/1)</strong>
+            </span>
+            <span>
+              🧶 Чанков: <strong>{Math.ceil(patternData.height / 4)}</strong>{" "}
+              (по 4 ряда)
+            </span>
+            <span>
+              🔗 ESP32 IP:{" "}
+              <strong>{httpServer.serverIp || computerIp}:6666</strong>
+            </span>
           </div>
         </div>
       )}
@@ -1282,8 +1563,12 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
         <div className="server-status-panel">
           <div className="status-header">
             <h4>📡 Статус сервера</h4>
-            <span className={`status-badge ${httpServer.isEspConnected ? "connected" : "waiting"}`}>
-              {httpServer.isEspConnected ? "✅ ESP32 подключён" : "🔌 Ожидание подключения"}
+            <span
+              className={`status-badge ${httpServer.isEspConnected ? "connected" : "waiting"}`}
+            >
+              {httpServer.isEspConnected
+                ? "✅ ESP32 подключён"
+                : "🔌 Ожидание подключения"}
             </span>
           </div>
 
@@ -1291,7 +1576,10 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
           <div className="progress-section">
             <div className="progress-label">
               <span>Прогресс вязания</span>
-              <span>{httpServer.currentRow}/{httpServer.totalRows} рядов ({httpServer.progressPercent}%)</span>
+              <span>
+                {httpServer.currentRow}/{httpServer.totalRows} рядов (
+                {httpServer.progressPercent}%)
+              </span>
             </div>
             <div className="progress-bar">
               <div
@@ -1305,34 +1593,40 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
           <div className="chunk-progress">
             <h5>📦 Отправленные чанки:</h5>
             <div className="chunk-grid">
-              {Array.from({ length: Math.ceil(httpServer.totalRows / 4) }, (_, i) => {
-                const chunkStart = i * 4;
-                const chunkEnd = Math.min((i + 1) * 4, httpServer.totalRows);
-                const isSent = chunkStart < httpServer.currentRow;
-                const isCurrent = chunkStart >= httpServer.currentRow &&
-                                  chunkStart < httpServer.currentRow + 4;
+              {Array.from(
+                { length: Math.ceil(httpServer.totalRows / 4) },
+                (_, i) => {
+                  const chunkStart = i * 4;
+                  const chunkEnd = Math.min((i + 1) * 4, httpServer.totalRows);
+                  const isSent = chunkStart < httpServer.currentRow;
+                  const isCurrent =
+                    chunkStart >= httpServer.currentRow &&
+                    chunkStart < httpServer.currentRow + 4;
 
-                return (
-                  <div
-                    key={i}
-                    className={`chunk-item ${isSent ? 'sent' : ''} ${isCurrent ? 'current' : ''}`}
-                    title={`Чанк ${i + 1}: ряды ${chunkStart}-${chunkEnd - 1}`}
-                  >
-                    <span className="chunk-number">{i + 1}</span>
-                    <span className="chunk-rows">{chunkStart}-{chunkEnd - 1}</span>
-                    {isSent && <span className="chunk-status">✓</span>}
-                    {isCurrent && <span className="chunk-status">⟳</span>}
-                  </div>
-                );
-              })}
+                  return (
+                    <div
+                      key={i}
+                      className={`chunk-item ${isSent ? "sent" : ""} ${isCurrent ? "current" : ""}`}
+                      title={`Чанк ${i + 1}: ряды ${chunkStart}-${chunkEnd - 1}`}
+                    >
+                      <span className="chunk-number">{i + 1}</span>
+                      <span className="chunk-rows">
+                        {chunkStart}-{chunkEnd - 1}
+                      </span>
+                      {isSent && <span className="chunk-status">✓</span>}
+                      {isCurrent && <span className="chunk-status">⟳</span>}
+                    </div>
+                  );
+                },
+              )}
             </div>
           </div>
 
           {/* Connection Info */}
           <div className="connection-info">
             <p>
-              <strong>Настройте ESP32:</strong><br />
-              В файле <code>client.rs</code> укажите IP вашего компьютера:
+              <strong>Настройте ESP32:</strong>
+              <br />В файле <code>client.rs</code> укажите IP вашего компьютера:
             </p>
             <code className="ip-code">
               client::init_server_ip("{httpServer.serverIp || computerIp}");
@@ -1360,11 +1654,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       )}
 
       {/* Error Message */}
-      {error && (
-        <div className="error-message">
-          ❌ {error}
-        </div>
-      )}
+      {error && <div className="error-message">❌ {error}</div>}
 
       {/* Empty State */}
       {!patternData && !converting && (
@@ -1380,10 +1670,7 @@ export default function KnittingTab({ projectId, garmentTypeId, selectedPatternF
       {/* Toast уведомления */}
       <div className="toast-container">
         {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className={`toast toast-${toast.type}`}
-          >
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
             {toast.message}
           </div>
         ))}

@@ -83,9 +83,9 @@ impl BlueprintCalculator {
             gen_raglan_decreases(armhole_row_front + 2, garment_length - 2, dec_front, r);
 
         let neck_depth = (m.glg * r).round() as i32;
-        let (neck_rows, neck_counts) = gen_u_neckline_decreases(neck_front_st, neck_depth);
+        let (neck_rows, neck_counts) = calculate_neckline_decreases(neck_front_st/2, neck_depth, garment_length - neck_depth);
         let neck_decreases_rows_back = rows_counts_to_groups(&neck_rows, &neck_counts);
-        let neck_decreases_rows_front = neck_decreases_rows_back.clone();
+        let neck_decreases_rows_front = rows_counts_to_groups(&neck_rows, &neck_counts);
 
         let half_neck_front_st = ((m.oh / 2.0 / 2.0) * p).round() as i32;
         let rem = (neck_depth - half_neck_front_st).max(0) as f64;
@@ -433,9 +433,9 @@ impl BlueprintCalculator {
         let neck_depth_rows = (m.glg * r).round() as i32;
         let half_neck = (m.oh / 2.0 / 2.0 * p).round() as i32;
         let (neck_rows_back, neck_counts_back) =
-            calculate_neckline_decreases(half_neck, (m.glg / 2.0 * r).round() as i32);
+            calculate_neckline_decreases(half_neck, (m.glg / 2.0 * r).round() as i32, garment_len_rows - neck_depth_rows);
         let (neck_rows_front, neck_counts_front) =
-            calculate_neckline_decreases(half_neck, neck_depth_rows);
+            calculate_neckline_decreases(half_neck, neck_depth_rows, garment_len_rows - neck_depth_rows);
         let neck_decreases_rows_back = rows_counts_to_groups(&neck_rows_back, &neck_counts_back);
         let neck_decreases_rows_front = rows_counts_to_groups(&neck_rows_front, &neck_counts_front);
         let rem_back = ((m.glg / 2.0 * r).round() as i32 - half_neck).max(0);
@@ -942,42 +942,61 @@ fn gen_raglan_decreases(start: i32, end: i32, total: i32, r: f64) -> (Vec<i32>, 
         return (rows, counts);
     }
 
-    let mut remaining = total;
-    let mut current = start;
+    let available_rows = end - start;
     let pattern = if r >= 3.5 { [1, 2, 1] } else { [1, 1, 2] };
+    let stitches_per_cycle: i32 = pattern.iter().sum();
+    let steps_per_cycle = pattern.len() as i32;
+
+    // Считаем сколько шагов убавок нужно
+    let full_cycles = total / stitches_per_cycle;
+    let remainder = total % stitches_per_cycle;
+
+    let mut num_steps = full_cycles * steps_per_cycle;
+    if remainder > 0 {
+        num_steps += if remainder >= stitches_per_cycle - 1 {
+            2
+        } else {
+            1
+        };
+    }
+
+    // Ограничиваем чтобы влезть в available_rows
+    num_steps = num_steps.min(available_rows);
+
+    if num_steps == 0 {
+        return (rows, counts);
+    }
+
+    // ✅ РАВНОМЕРНОЕ распределение — последняя убавка будет в конце!
+    let mut remaining = total;
     let mut pidx = 0;
 
-    // 🔹 Фиксированный шаг 2 ряда — высота реглана зависит только от обхвата груди!
-    while remaining > 0 && current < end {
-        let dc = pattern[pidx % 3].min(remaining);
-        rows.push(current);
-        counts.push(dc);
-        remaining -= dc;
-        current += 2; // ← Ключевое: фиксированный интервал
+    for i in 0..num_steps {
+        // Ключевая формула: равномерное распределение по всему диапазону
+        let row = if num_steps == 1 {
+            end - 1
+        } else {
+            start + ((i as i64 * available_rows as i64) / (num_steps as i64 - 1)) as i32
+        };
+
+        let base_dc = pattern[pidx % 3].min(remaining);
+
+        // Избегаем дубликатов рядов
+        if rows.last().map_or(true, |&r| r != row) {
+            rows.push(row);
+            counts.push(base_dc);
+        } else if let Some(last) = counts.last_mut() {
+            *last += base_dc;
+        }
+
+        remaining -= base_dc;
         pidx += 1;
     }
 
-    // 🔹 Если убавки не влезли — «растягиваем» последнюю группу до конца
-    //    (лучше одна большая убавка в конце, чем случайное число)
-    if remaining > 0 && !rows.is_empty() {
-        // Добавляем остаток к последней группе, если она близко к концу
-        if let Some(last_row) = rows.last() {
-            if end - last_row <= 4 {
-                // Если до конца ≤ 4 ряда
-                if let Some(last_count) = counts.last_mut() {
-                    *last_count += remaining;
-                    remaining = 0;
-                }
-            }
-        }
-    }
-
-    // 🔹 Если всё ещё остались — добавляем финальную группу прямо перед end
+    // Остаток добавляем к последней убавке (в конце реглана)
     if remaining > 0 {
-        let final_row = (end - 1).max(start);
-        if rows.last().map_or(true, |&r| r != final_row) {
-            rows.push(final_row);
-            counts.push(remaining);
+        if let Some(last) = counts.last_mut() {
+            *last += remaining;
         }
     }
 
@@ -995,10 +1014,6 @@ pub fn decrease_groups_to_rows(groups: &[DecreaseGroup]) -> (Vec<i32>, Vec<i32>)
         }
     }
     (rows, counts)
-}
-
-fn gen_u_neckline_decreases(neck_w: i32, neck_depth: i32) -> (Vec<i32>, Vec<i32>) {
-    calculate_neckline_decreases(neck_w / 2, neck_depth)
 }
 
 fn gen_sleeve_raglan_rows(dims: &SleeveDimensions, is_front_side: bool) -> Vec<i32> {
@@ -1279,7 +1294,7 @@ fn rows_counts_to_groups(rows: &[i32], counts: &[i32]) -> Vec<DecreaseGroup> {
     let mut groups = Vec::new();
     let mut current_group = DecreaseGroup {
         stitches: counts[0],
-        every_n_rows: rows[0],
+        every_n_rows: 2,
         repeat_count: 1,
     };
     for i in 1..rows.len() {
@@ -1302,82 +1317,44 @@ fn rows_counts_to_groups(rows: &[i32], counts: &[i32]) -> Vec<DecreaseGroup> {
 pub fn calculate_neckline_decreases(
     half_neck_width_stitches: i32,
     neck_height_rows: i32,
+    start_row: i32
 ) -> (Vec<i32>, Vec<i32>) {
-    let mut steps: Vec<DecreaseGroup> = Vec::new();
-    let part4 = half_neck_width_stitches / 4 + half_neck_width_stitches % 4;
-    let part2 = half_neck_width_stitches / 4;
-    let part3 = half_neck_width_stitches / 4;
-    let part1 = half_neck_width_stitches / 4;
-
-    if part1 > 0 {
-        steps.push(DecreaseGroup {
-            stitches: part1,
-            every_n_rows: 1,
-            repeat_count: 1,
-        });
-    }
-    if part2 > 0 {
-        let twos = part2 / 2;
-        let rem = part2 % 2;
-        if twos > 0 {
-            steps.push(DecreaseGroup {
-                stitches: twos,
-                every_n_rows: 2,
-                repeat_count: 2,
-            });
-        }
-        if rem > 0 {
-            steps.push(DecreaseGroup {
-                stitches: rem,
-                every_n_rows: 2,
-                repeat_count: 1,
-            });
-        }
-    }
-    if part3 > 0 {
-        let full_threes = part3 / 3;
-        let rem = part3 % 3;
-        if full_threes > 0 {
-            steps.push(DecreaseGroup {
-                stitches: full_threes,
-                every_n_rows: 2,
-                repeat_count: 3,
-            });
-        }
-        if rem > 0 {
-            steps.push(DecreaseGroup {
-                stitches: rem,
-                every_n_rows: 2,
-                repeat_count: 1,
-            });
-        }
-    }
-    if part4 > 0 {
-        let fors = part4 / 4;
-        if fors > 0 {
-            steps.push(DecreaseGroup {
-                stitches: fors,
-                every_n_rows: 2,
-                repeat_count: 4,
-            });
-        }
-    }
-
     let mut rows = Vec::new();
     let mut counts = Vec::new();
-    let mut current_row = 0;
-    for group in &steps {
-        for _ in 0..group.repeat_count {
-            current_row += group.every_n_rows;
-            if current_row <= neck_height_rows {
-                rows.push(current_row);
-                counts.push(group.stitches);
-            }
+    if half_neck_width_stitches <= 0 || neck_height_rows <= 0 {
+        return (rows, counts);
+    }
+    let first_dec = half_neck_width_stitches / 4;
+    rows.push(start_row + 2);
+    counts.push(first_dec);
+    let mut dec = (half_neck_width_stitches - first_dec)/4;
+    if (half_neck_width_stitches - first_dec)%4 != 0 {
+        dec += 1;
+    }
+    let mut rem = half_neck_width_stitches - first_dec - dec;
+    while dec > 1 && rem > 0 {
+        rows.push(rows.last().unwrap() + 2);
+        counts.push(dec.max(1));
+        dec = (rem - dec)/4;
+        if (rem - dec)%4 != 0 {
+        dec += 1;
+    }
+        rem -= dec;
+    }
+    println!("{:?}, {:?}, rem: {}, last row: {}", rows, counts, rem, rows.last().unwrap_or(&start_row));
+    let min_interval = 2;
+    //после того как убавка стала 1 петлей ЕСЛИ осталось место для убавок их надо распределить чем дальше тем реже
+     if dec == 1 && rows.last().unwrap_or(&start_row) < &(start_row + neck_height_rows) {
+        let available_rows = (start_row + neck_height_rows) - rows.last().unwrap_or(&start_row);
+        let remaining_decreases = rem;
+        let intervals = distribute_decreases_with_interval(available_rows, remaining_decreases, min_interval);
+        for interval in intervals {
+            rows.push(rows.last().unwrap() + interval);
+            counts.push(1);
         }
     }
     (rows, counts)
 }
-
 fn distribute_decreases_with_interval(
     available_rows: i32,
     total_decreases: i32,
