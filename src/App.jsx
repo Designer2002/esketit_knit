@@ -4,6 +4,7 @@ import Start from "./Start/Start";
 import CreateProject from "./CreateProject/CreateProject";
 import OpenProject from "./OpenProject/OpenProject";
 import ProjectEditor from "./ProjectEditor/ProjectEditor";
+import { BlueprintProvider } from "./context/BlueprintContext";
 
 function App() {
   return (
@@ -12,7 +13,14 @@ function App() {
         <Route path="/" element={<Start />} />
         <Route path="/create_project" element={<CreateProject />} />
         <Route path="/open_project" element={<OpenProject />}/>
-        <Route path="/editor/:projectId" element={<ProjectEditor />} />
+        <Route
+          path="/editor/:projectId"
+          element={
+            <BlueprintProvider>
+              <ProjectEditor />
+            </BlueprintProvider>
+          }
+        />
       </Routes>
     </Router>
   );

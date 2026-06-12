@@ -10,6 +10,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import useToast from "../Toast/useToast";
 import "./BlueprintsTab.css";
+import { useBlueprint } from "../context/BlueprintContext";
 
 // ===== DEFAULT SIZE M MEASUREMENTS — только 9 необходимых + плотность =====
 const DEFAULT_MEASUREMENTS = {
@@ -1813,7 +1814,7 @@ const saveSilhouetteType = async (type) => {
       addToast("Ошибка сохранения типа рукава", "error");
     }
   };
-
+  const { setWidestWidth } = useBlueprint();
   const recalculate = async () => {
     try {
       const calc = await invoke("calculate_blueprint", {
@@ -1833,7 +1834,26 @@ const saveSilhouetteType = async (type) => {
           ...new Set(newNodes.map((n) => n.part_code)),
         ]);
       }
+      if (calc) {
+      let maxWidth = 0;
+      if (calc.type === "raglan") {
+        maxWidth = Math.max(
+          calc.back_width_stitches || 0,
+          calc.front_width_stitches || 0,
+          calc.sleeve_top_stitches || 0
+        );
+      } else {
+        // Для втачного рукава берем самую широкую часть
+        maxWidth = Math.max(
+          calc.hem_width_stitches || 0,
+          calc.underarm_width_stitches || 0,
+          calc.sleeve_widest_stitches || 0
+        );
+      }
+      if (maxWidth > 0) setWidestWidth(maxWidth);
+    }
       setNodes(newNodes);
+      
     } catch (e) {
       console.error("Failed to calculate blueprint:", e);
       addToast("Ошибка расчёта: " + e, "error");

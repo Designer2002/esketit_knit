@@ -524,7 +524,7 @@
 
 .info-grid span {
   color: var(--text-color);
-  font-size: 0.95rem;
+  font-size: 0.75rem;
 }
 
 .info-grid strong {
@@ -1106,3 +1106,110 @@
   transform: translateY(-1px);
 }
 
+/* В KnittingTab.css */
+
+/* Inline KSL settings in toolbar */
+.knitting-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.ksl-settings-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ksl-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.ksl-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.ksl-input {
+  width: 60px;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.ksl-value {
+  font-weight: 600;
+  color: #4CAF50;
+  font-size: 0.95rem;
+  min-width: 50px;
+  text-align: center;
+}
+
+.ksl-padding-indicator {
+  font-size: 0.8rem;
+  color: #FF9800;
+  opacity: 0.8;
+}
+
+/* Info panel adjustments */
+.pattern-info-panel {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pattern-info-panel h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.info-grid span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.hint-text {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  font-weight: normal;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .knitting-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .ksl-settings-inline {
+    justify-content: center;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}

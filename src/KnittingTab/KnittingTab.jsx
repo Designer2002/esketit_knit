@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./KnittingTab.css";
 import esp_connect from "../assets/sounds/esp_connect.mp3";
 import knit_complete from "../assets/sounds/knit_complete.mp3";
+import { useBlueprint } from "../context/BlueprintContext";
 
 export default function KnittingTab({
   projectId,
@@ -825,9 +826,59 @@ export default function KnittingTab({
     }
   };
 
-  // Запуск HTTP сервера
+  // Добавь новые состояния в начало компонента KnittingTab:
+  const [kslWidth, setKslWidth] = useState(null); // Ширина KSL (датчиков)
+  const [useManualKsl, setUseManualKsl] = useState(false); // Ручной ввод KSL
+  const [manualKslWidth, setManualKslWidth] = useState(48); // Ручное значение KSL
+  const [patternWithPadding, setPatternWithPadding] = useState(null); // Узор с нулями по краям
+
+  // Функция для добавления нулей по краям узора
+  const padPatternWithZeros = useCallback((rows, targetWidth) => {
+    if (!rows || rows.length === 0) return null;
+
+    const currentWidth = rows[0].length;
+    if (currentWidth >= targetWidth) return rows; // Узор уже шире или равен
+
+    const paddingEachSide = Math.floor((targetWidth - currentWidth) / 2);
+    const remainder = (targetWidth - currentWidth) % 2; // Если нечетное количество
+
+    return rows.map((row) => {
+      const leftPadding = Array(paddingEachSide).fill(false);
+      const rightPadding = Array(paddingEachSide + remainder).fill(false);
+      return [...leftPadding, ...row, ...rightPadding];
+    });
+  }, []);
+
+  // Функция для расчета ширины KSL из blueprint
+  const { widestWidth } = useBlueprint();
+
+  useEffect(() => {
+    if (!useManualKsl && widestWidth > 0) {
+      setKslWidth(widestWidth);
+    }
+  }, [widestWidth, useManualKsl]);
+  // Эффект для применения padding к узору
+  useEffect(() => {
+    if (!patternData || !kslWidth) {
+      setPatternWithPadding(patternData);
+      return;
+    }
+
+    const padded = padPatternWithZeros(patternData.rows, kslWidth);
+    if (padded) {
+      setPatternWithPadding({
+        rows: padded,
+        width: kslWidth,
+        height: patternData.height,
+        format: patternData.format,
+      });
+    } else {
+      setPatternWithPadding(patternData);
+    }
+  }, [patternData, kslWidth, padPatternWithZeros]);
+
   const startHttpServer = async () => {
-    if (!patternData) return;
+    if (!patternWithPadding) return;
 
     // Проверяем наличие узоров на выкройке и показываем подсказку про датчики
     try {
@@ -835,7 +886,7 @@ export default function KnittingTab({
         projectId,
       }).catch(() => []);
       if (stamps && stamps.length > 0) {
-        // Находим самый широкий узор в выкройке
+        // Находим самую широкую ЧАСТЬ ВЫКРОЙКИ (не узора!)
         const widestStamp = stamps.reduce(
           (max, s) => (s.width > max.width ? s : max),
           stamps[0],
@@ -843,16 +894,22 @@ export default function KnittingTab({
         const patternName =
           stamps.find((s) => s.id === widestStamp.pattern_id)?.name ||
           "#" + widestStamp.pattern_id;
-        // Добавляем toast через существующую систему
+
         addToast(
-          `📐 Датчики: выставьте на ширину самого широкого узора — ${widestStamp.width} п. (${patternName}). Вязание по ${patternData.width} п.`,
+          `📐 Датчики: выставьте на ширину детали — ${widestStamp.width} п. (${patternName}). Узор расширен до ${kslWidth} п.`,
           "info",
           8000,
         );
+      } else if (useManualKsl) {
+        // Ручной режим
+        addToast(
+          `📐 Датчики: выставьте на ${kslWidth} петель (ручной режим)`,
+          "info",
+          5000,
+        );
       }
     } catch (e) {
-      // Если blueprint таблицы нет — ничего страшного, вяжем как обычно
-      console.log("Blueprint stamps not available, knitting normally");
+      console.log("Blueprint stamps not available");
     }
 
     // Показываем модалку с подтверждением
@@ -861,6 +918,7 @@ export default function KnittingTab({
         "Убедитесь, что:\n" +
         "• ESP32 включен и подключён к WiFi\n" +
         `• IP адрес ESP32 настроен на: ${computerIp}\n` +
+        `• Датчики (KSL) выставлены на ${kslWidth || patternWithPadding.width} игл\n` +
         "• Нить заправлена в машину\n\n" +
         "Нажмите OK для запуска или Отмена для отмены.",
     );
@@ -878,9 +936,9 @@ export default function KnittingTab({
       }));
 
       const result = await invoke("start_esp32_http_server", {
-        patternRows: patternData.rows,
-        patternWidth: patternData.width,
-        patternHeight: patternData.height,
+        patternRows: patternWithPadding.rows, // Используем узор с padding!
+        patternWidth: patternWithPadding.width,
+        patternHeight: patternWithPadding.height,
         chunkSize: 4,
         port: 6666,
       }).catch(async (err) => {
@@ -896,9 +954,9 @@ export default function KnittingTab({
 
           // Пробуем снова
           return await invoke("start_esp32_http_server", {
-            patternRows: patternData.rows,
-            patternWidth: patternData.width,
-            patternHeight: patternData.height,
+            patternRows: patternWithPadding.rows,
+            patternWidth: patternWithPadding.width,
+            patternHeight: patternWithPadding.height,
             chunkSize: 4,
             port: 6666,
           });
@@ -912,7 +970,7 @@ export default function KnittingTab({
         ...prev,
         running: true,
         serverIp: computerIp,
-        totalRows: patternData.height,
+        totalRows: patternWithPadding.height,
       }));
 
       // Запускаем опрос статуса
@@ -923,6 +981,8 @@ export default function KnittingTab({
       showAlert("Ошибка запуска сервера: " + err.message, "error");
     }
   };
+
+  
 
   // Остановка сервера
   const stopHttpServer = async () => {
@@ -1159,42 +1219,45 @@ export default function KnittingTab({
   ]);
 
   // Создание мини-превью для галереи
-const createMiniPreview = useCallback((rows, width, height, size = 60) => {
-  if (!rows || rows.length === 0) return '';
-  
-  const miniCanvas = document.createElement('canvas');
-  const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
-  miniCanvas.width = Math.max(1, width * cellSize);
-  miniCanvas.height = Math.max(1, height * cellSize);
-  
-  const ctx = miniCanvas.getContext('2d');
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-  
-  // 🔁 Вертикальный флип: рисуем строки в обратном порядке
-  for (let y = 0; y < rows.length; y++) {
-    // Инвертируем индекс: 0 → последняя строка, height-1 → первая
-    const visualY = height - 1 - y;
-    const row = rows[visualY];
-    
-    for (let x = 0; x < row.length; x++) {
-      if (
-        row[x] === true ||
-        row[x] === 1 ||
-        row[x] === "1" ||
-        row[x] === "#"
-      ) {
-        ctx.fillStyle = patternColors.dark;
-      } else {
-        ctx.fillStyle = patternColors.light;
+  const createMiniPreview = useCallback(
+    (rows, width, height, size = 60) => {
+      if (!rows || rows.length === 0) return "";
+
+      const miniCanvas = document.createElement("canvas");
+      const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
+      miniCanvas.width = Math.max(1, width * cellSize);
+      miniCanvas.height = Math.max(1, height * cellSize);
+
+      const ctx = miniCanvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
+
+      // 🔁 Вертикальный флип: рисуем строки в обратном порядке
+      for (let y = 0; y < rows.length; y++) {
+        // Инвертируем индекс: 0 → последняя строка, height-1 → первая
+        const visualY = height - 1 - y;
+        const row = rows[visualY];
+
+        for (let x = 0; x < row.length; x++) {
+          if (
+            row[x] === true ||
+            row[x] === 1 ||
+            row[x] === "1" ||
+            row[x] === "#"
+          ) {
+            ctx.fillStyle = patternColors.dark;
+          } else {
+            ctx.fillStyle = patternColors.light;
+          }
+          // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
       }
-      // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
-      ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-    }
-  }
-  
-  return miniCanvas.toDataURL('image/png');
-}, [patternColors]);
+
+      return miniCanvas.toDataURL("image/png");
+    },
+    [patternColors],
+  );
 
   return (
     <div className="knitting-tab">
@@ -1290,6 +1353,41 @@ const createMiniPreview = useCallback((rows, width, height, size = 60) => {
         >
           🎨 Цвета
         </button>
+
+  {!httpServer.running && patternData && (
+    <div className="ksl-settings-inline">
+      <label className="ksl-checkbox">
+        <input
+          type="checkbox"
+          checked={useManualKsl}
+          onChange={(e) => setUseManualKsl(e.target.checked)}
+        />
+        <span>Ширина полотна (по выкройке или вручную?):</span>
+      </label>
+      
+      {useManualKsl ? (
+        <input
+          type="number"
+          className="ksl-input"
+          min="1"
+          max="200"
+          value={manualKslWidth}
+          onChange={(e) => setManualKslWidth(Number(e.target.value))}
+          title="Ширина датчиков (петель)"
+        />
+      ) : (
+        <span className="ksl-value" title="Автоматически из выкройки">
+          {kslWidth || "—"} п.
+        </span>
+      )}
+      
+      {patternData.width < kslWidth && (
+        <span className="ksl-padding-indicator" title="Узор расширен нулями">
+          (+{kslWidth - patternData.width})
+        </span>
+      )}
+    </div>
+  )}
 
         {/* Кнопки сохранения/восстановления прогресса */}
         {httpServer.running && (
@@ -1401,7 +1499,7 @@ const createMiniPreview = useCallback((rows, width, height, size = 60) => {
           <h5>🎨 Настройка цветов узора</h5>
           <div className="color-picker-grid">
             <div className="color-picker-item">
-              <label>Тёмный (узор):</label>
+              <label>Фон:</label>
               <div className="color-input-wrapper">
                 <input
                   type="color"
@@ -1429,7 +1527,7 @@ const createMiniPreview = useCallback((rows, width, height, size = 60) => {
               </div>
             </div>
             <div className="color-picker-item">
-              <label>Светлый (фон):</label>
+              <label>Узор:</label>
               <div className="color-input-wrapper">
                 <input
                   type="color"
@@ -1550,6 +1648,11 @@ const createMiniPreview = useCallback((rows, width, height, size = 60) => {
               🧶 Чанков: <strong>{Math.ceil(patternData.height / 4)}</strong>{" "}
               (по 4 ряда)
             </span>
+            {kslWidth && (
+        <span>
+          По ширине изделия: <strong>{kslWidth} игл</strong>
+          {useManualKsl && <span className="hint-text"> (вручную)</span>}
+        </span> )}
             <span>
               🔗 ESP32 IP:{" "}
               <strong>{httpServer.serverIp || computerIp}:6666</strong>

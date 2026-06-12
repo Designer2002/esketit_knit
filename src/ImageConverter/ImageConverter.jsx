@@ -8,7 +8,11 @@ import useToast from "../Toast/useToast";
 import "../Toast/Toast.css";
 import "./ImageConverter.css";
 
-export default function ImageConverter({ projectPath, projectId, onPatternCreated }) {
+export default function ImageConverter({
+  projectPath,
+  projectId,
+  onPatternCreated,
+}) {
   const { addToast, ToastContainer } = useToast();
   const [sourceImage, setSourceImage] = useState(null);
   const [sourceImageInfo, setSourceImageInfo] = useState(null);
@@ -26,7 +30,10 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
   const [croppieVisible, setCroppieVisible] = useState(false);
   const [cropShape, setCropShape] = useState("square"); // "square" | "circle"
   const [viewportSize, setViewportSize] = useState({ width: 300, height: 300 });
-  const [maxViewportSize, setMaxViewportSize] = useState({ width: 500, height: 500 });
+  const [maxViewportSize, setMaxViewportSize] = useState({
+    width: 500,
+    height: 500,
+  });
   const [isCroppieInitializing, setIsCroppieInitializing] = useState(false);
   const [croppedCanvasCache, setCroppedCanvasCache] = useState(null);
 
@@ -36,9 +43,15 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
 
   // Modal
   const [modal, setModal] = useState({
-    isOpen: false, title: "", message: "", type: "info",
-    onConfirm: null, onCancel: null, showCancel: false,
-    confirmText: "OK", cancelText: "Отмена",
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info",
+    onConfirm: null,
+    onCancel: null,
+    showCancel: false,
+    confirmText: "OK",
+    cancelText: "Отмена",
   });
 
   const previewCanvasRef = useRef(null);
@@ -57,7 +70,12 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
       const selected = await open({
         title: "Выберите изображение для конвертации",
         multiple: false,
-        filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp"] }]
+        filters: [
+          {
+            name: "Images",
+            extensions: ["png", "jpg", "jpeg", "bmp", "gif", "webp"],
+          },
+        ],
       });
 
       if (selected) {
@@ -68,7 +86,12 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
         const img = new Image();
         img.onload = () => {
           setSourceImage(img);
-          setSourceImageInfo({ width: img.width, height: img.height, path: selected, blobUrl});
+          setSourceImageInfo({
+            width: img.width,
+            height: img.height,
+            path: selected,
+            blobUrl,
+          });
           // Clear cropped cache when new image is loaded
           setCroppedCanvasCache(null);
           // Обрезка по умолчанию свёрнута
@@ -118,13 +141,16 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
         // Ограничиваем размер Croppie чтобы не занимал весь экран
         const maxBoundarySize = 500;
         const boundaryWidth = Math.min(maxViewportSize.width, maxBoundarySize);
-        const boundaryHeight = Math.min(maxViewportSize.height, maxBoundarySize);
+        const boundaryHeight = Math.min(
+          maxViewportSize.height,
+          maxBoundarySize,
+        );
 
         croppieInstance.current = new Croppie(croppieContainerRef.current, {
           viewport: {
             width: Math.min(viewportSize.width, boundaryWidth),
             height: Math.min(viewportSize.height, boundaryHeight),
-            type: cropShape
+            type: cropShape,
           },
           boundary: { width: boundaryWidth, height: boundaryHeight },
           enableExif: true,
@@ -184,239 +210,300 @@ export default function ImageConverter({ projectPath, projectId, onPatternCreate
   }, [sourceImageInfo]);
 
   // Применение фильтров
-  const applyImageFilters = useCallback((img) => {
-    if (!img) {
-      console.warn("⚠️ applyImageFilters: img is null");
-      return null;
-    }
-
-    const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
-    tempCanvas.width = img.width || 1;
-    tempCanvas.height = img.height || 1;
-    
-    try {
-      tempCtx.drawImage(img, 0, 0);
-    } catch (e) {
-      console.error("❌ drawImage error:", e);
-      return null;
-    }
-
-    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-    const data = imageData.data;
-
-    const brightnessFactor = brightness;
-    const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
-    const saturationFactor = 1 + saturation / 100;
-
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i];
-      let g = data[i + 1];
-      let b = data[i + 2];
-
-      r += brightnessFactor;
-      g += brightnessFactor;
-      b += brightnessFactor;
-
-      r = contrastFactor * (r - 128) + 128;
-      g = contrastFactor * (g - 128) + 128;
-      b = contrastFactor * (b - 128) + 128;
-
-      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      r = gray + saturationFactor * (r - gray);
-      g = gray + saturationFactor * (g - gray);
-      b = gray + saturationFactor * (b - gray);
-
-      data[i] = Math.max(0, Math.min(255, r));
-      data[i + 1] = Math.max(0, Math.min(255, g));
-      data[i + 2] = Math.max(0, Math.min(255, b));
-    }
-
-    tempCtx.putImageData(imageData, 0, 0);
-    return tempCanvas;
-  }, [brightness, contrast, saturation]);
-
-  // Обработка canvas (фильтры + пикселизация + превью)
-  const processCanvas = useCallback((canvas) => {
-    if (!canvas || !canvas.width || !canvas.height) {
-      console.error("❌ processCanvas: canvas is invalid!", canvas);
-      return;
-    }
-
-    console.log("🎨 processCanvas started:", canvas.width, "x", canvas.height);
-
-    try {
-      // Применяем фильтры
-      const filteredCanvas = applyImageFilters(canvas);
-      const source = filteredCanvas || canvas;
-
-      if (!source || !source.width || !source.height) {
-        console.error("❌ source is invalid after filtering!");
-        return;
+  const applyImageFilters = useCallback(
+    (img) => {
+      if (!img) {
+        console.warn("⚠️ applyImageFilters: img is null");
+        return null;
       }
 
-      console.log("🎨 Source after filters:", source.width, "x", source.height);
-
-      // Рассчитываем размер пикселя
-      const targetWidth = Math.floor(source.width / pixelSize);
-      const targetHeight = Math.floor(source.height / pixelSize);
-
-      console.log("📐 Target size:", targetWidth, "x", targetHeight, "pixelSize:", pixelSize);
-
-      // Проверка на ограничение 200 игл
-      if (targetWidth > 200) {
-        showAlert(
-          `⚠️ Ширина узора (${targetWidth} пикселей) превышает лимит в 200 игл!\n\n` +
-          `Увеличьте размер пикселя (сейчас: ${pixelSize}) или обрежьте изображение.`,
-          "warning"
-        );
-        return;
-      }
-
-      // Создаём пикселизированное изображение
       const tempCanvas = document.createElement("canvas");
       const tempCtx = tempCanvas.getContext("2d");
-      tempCanvas.width = targetWidth;
-      tempCanvas.height = targetHeight;
+      tempCanvas.width = img.width || 1;
+      tempCanvas.height = img.height || 1;
 
-      tempCtx.drawImage(source, 0, 0, targetWidth, targetHeight);
-
-      // Конвертируем в Ч/Б
-      const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
-      const data = imageData.data;
-      const rows = [];
-
-      for (let y = 0; y < targetHeight; y++) {
-        let row = "";
-        for (let x = 0; x < targetWidth; x++) {
-          const idx = (y * targetWidth + x) * 4;
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          const isDark = invert ? gray > threshold : gray < threshold;
-          row += isDark ? "1" : "0";
-        }
-        rows.push(row);
+      try {
+        tempCtx.drawImage(img, 0, 0);
+      } catch (e) {
+        console.error("❌ drawImage error:", e);
+        return null;
       }
 
-      console.log("✅ Generated", rows.length, "rows");
+      const imageData = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height,
+      );
+      const data = imageData.data;
 
-      // Отрисовываем пикселизированное превью
-      const previewCanvas = previewCanvasRef.current;
-      if (previewCanvas) {
-        const ctx = previewCanvas.getContext("2d");
-        const previewPixelSize = Math.max(2, Math.min(6, Math.floor(300 / Math.max(targetWidth, targetHeight))));
-        previewCanvas.width = targetWidth * previewPixelSize;
-        previewCanvas.height = targetHeight * previewPixelSize;
+      const brightnessFactor = brightness;
+      const contrastFactor =
+        (259 * (contrast + 255)) / (255 * (259 - contrast));
+      const saturationFactor = 1 + saturation / 100;
 
-        const savedColors = localStorage.getItem('patternColors');
-        const colors = savedColors ? JSON.parse(savedColors) : { dark: "#1e40af", light: "#e5e7eb" };
+      for (let i = 0; i < data.length; i += 4) {
+        let r = data[i];
+        let g = data[i + 1];
+        let b = data[i + 2];
+
+        r += brightnessFactor;
+        g += brightnessFactor;
+        b += brightnessFactor;
+
+        r = contrastFactor * (r - 128) + 128;
+        g = contrastFactor * (g - 128) + 128;
+        b = contrastFactor * (b - 128) + 128;
+
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = gray + saturationFactor * (r - gray);
+        g = gray + saturationFactor * (g - gray);
+        b = gray + saturationFactor * (b - gray);
+
+        data[i] = Math.max(0, Math.min(255, r));
+        data[i + 1] = Math.max(0, Math.min(255, g));
+        data[i + 2] = Math.max(0, Math.min(255, b));
+      }
+
+      tempCtx.putImageData(imageData, 0, 0);
+      return tempCanvas;
+    },
+    [brightness, contrast, saturation],
+  );
+
+  // Обработка canvas (фильтры + пикселизация + превью)
+  const processCanvas = useCallback(
+    (canvas) => {
+      if (!canvas || !canvas.width || !canvas.height) {
+        console.error("❌ processCanvas: canvas is invalid!", canvas);
+        return;
+      }
+
+      console.log(
+        "🎨 processCanvas started:",
+        canvas.width,
+        "x",
+        canvas.height,
+      );
+
+      try {
+        // Применяем фильтры
+        const filteredCanvas = applyImageFilters(canvas);
+        const source = filteredCanvas || canvas;
+
+        if (!source || !source.width || !source.height) {
+          console.error("❌ source is invalid after filtering!");
+          return;
+        }
+
+        console.log(
+          "🎨 Source after filters:",
+          source.width,
+          "x",
+          source.height,
+        );
+
+        // Рассчитываем размер пикселя
+        const targetWidth = Math.floor(source.width / pixelSize);
+        const targetHeight = Math.floor(source.height / pixelSize);
+
+        console.log(
+          "📐 Target size:",
+          targetWidth,
+          "x",
+          targetHeight,
+          "pixelSize:",
+          pixelSize,
+        );
+
+        // Проверка на ограничение 200 игл
+        if (targetWidth > 200) {
+          showAlert(
+            `⚠️ Ширина узора (${targetWidth} пикселей) превышает лимит в 200 игл!\n\n` +
+              `Увеличьте размер пикселя (сейчас: ${pixelSize}) или обрежьте изображение.`,
+            "warning",
+          );
+          return;
+        }
+
+        // Создаём пикселизированное изображение
+        const tempCanvas = document.createElement("canvas");
+        const tempCtx = tempCanvas.getContext("2d");
+        tempCanvas.width = targetWidth;
+        tempCanvas.height = targetHeight;
+
+        tempCtx.drawImage(source, 0, 0, targetWidth, targetHeight);
+
+        // Конвертируем в Ч/Б
+        const imageData = tempCtx.getImageData(0, 0, targetWidth, targetHeight);
+        const data = imageData.data;
+        const rows = [];
 
         for (let y = 0; y < targetHeight; y++) {
+          let row = "";
           for (let x = 0; x < targetWidth; x++) {
-            ctx.fillStyle = rows[y][x] === "1" ? colors.dark : colors.light;
-            ctx.fillRect(x * previewPixelSize, y * previewPixelSize, previewPixelSize, previewPixelSize);
+            const idx = (y * targetWidth + x) * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            const isDark = invert ? gray > threshold : gray < threshold;
+            row += isDark ? "1" : "0";
           }
+          rows.push(row);
         }
-        console.log("🎨 Preview drawn:", previewCanvas.width, "x", previewCanvas.height);
+
+        console.log("✅ Generated", rows.length, "rows");
+
+        // Отрисовываем пикселизированное превью
+        const previewCanvas = previewCanvasRef.current;
+        if (previewCanvas) {
+          const ctx = previewCanvas.getContext("2d");
+          const previewPixelSize = Math.max(
+            2,
+            Math.min(6, Math.floor(300 / Math.max(targetWidth, targetHeight))),
+          );
+          previewCanvas.width = targetWidth * previewPixelSize;
+          previewCanvas.height = targetHeight * previewPixelSize;
+
+          const savedColors = localStorage.getItem("patternColors");
+          const colors = savedColors
+            ? JSON.parse(savedColors)
+            : { dark: "#1e40af", light: "#e5e7eb" };
+
+          for (let y = 0; y < targetHeight; y++) {
+            for (let x = 0; x < targetWidth; x++) {
+              ctx.fillStyle = rows[y][x] === "1" ? colors.dark : colors.light;
+              ctx.fillRect(
+                x * previewPixelSize,
+                y * previewPixelSize,
+                previewPixelSize,
+                previewPixelSize,
+              );
+            }
+          }
+          console.log(
+            "🎨 Preview drawn:",
+            previewCanvas.width,
+            "x",
+            previewCanvas.height,
+          );
+        }
+
+        setPixelatedPreview({ rows, width: targetWidth, height: targetHeight });
+      } catch (error) {
+        console.error("❌ processCanvas error:", error);
+        showAlert("Ошибка пикселизации изображения", "error");
+      }
+    },
+    [
+      pixelSize,
+      threshold,
+      invert,
+      brightness,
+      contrast,
+      saturation,
+      applyImageFilters,
+    ],
+  );
+
+  const base64ToCanvas = (base64) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas);
+      };
+      img.onerror = reject;
+      img.src = base64;
+    });
+  };
+  // Пикселизация изображения
+  // Пикселизация изображения
+  const pixelateImage = useCallback(
+    async (useCroppie = true) => {
+      if (!sourceImage) {
+        console.log("⚠️ pixelateImage: sourceImage is null");
+        return;
       }
 
-      setPixelatedPreview({ rows, width: targetWidth, height: targetHeight });
-    } catch (error) {
-      console.error("❌ processCanvas error:", error);
-      showAlert("Ошибка пикселизации изображения", "error");
-    }
-  }, [pixelSize, threshold, invert, brightness, contrast, saturation, applyImageFilters]);
+      console.log("🎨 pixelateImage started, useCroppie:", useCroppie);
 
-const base64ToCanvas = (base64) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas);
-    };
-    img.onerror = reject;
-    img.src = base64;
-  });
-};
-  // Пикселизация изображения
-  // Пикселизация изображения
-const pixelateImage = useCallback(async (useCroppie = true) => {
-  if (!sourceImage) {
-    console.log("⚠️ pixelateImage: sourceImage is null");
-    return;
-  }
+      let sourceCanvas = null;
 
-  console.log("🎨 pixelateImage started, useCroppie:", useCroppie);
+      // ===== БЛОК CROPPIE =====
+      if (useCroppie && croppieInstance.current) {
+        try {
+          console.log("✂️ Calling croppie.result()...");
 
-  let sourceCanvas = null;
+          // 1. Ждём, пока Croppie будет готов (небольшая задержка)
+          await new Promise((resolve) => setTimeout(resolve, 100));
 
-  // ===== БЛОК CROPPIE =====
-  if (useCroppie && croppieInstance.current) {
-    try {
-      console.log("✂️ Calling croppie.result()...");
+          // 2. Вызываем result с правильными опциями
+          const result = await croppieInstance.current.result({
+            type: "canvas",
+            size: "viewport",
+            format: "png",
+            quality: 1,
+          });
 
-      // 1. Ждём, пока Croppie будет готов (небольшая задержка)
-      await new Promise(resolve => setTimeout(resolve, 100));
+          // 3. Проверяем и кэшируем результат
+          if (result && result instanceof HTMLCanvasElement) {
+            sourceCanvas = result;
+            setCroppedCanvasCache(result);
+          } else if (typeof result === "string") {
+            // base64 fallback
+            sourceCanvas = await base64ToCanvas(result);
+            setCroppedCanvasCache(sourceCanvas);
+          } else {
+            console.warn(
+              "⚠️ Croppie returned invalid result, using cached or fallback",
+            );
+            sourceCanvas = croppedCanvasCache;
+          }
+        } catch (e) {
+          console.error("❌ Croppie error:", e.message);
+          sourceCanvas = croppedCanvasCache;
+        }
+      }
 
-      // 2. Вызываем result с правильными опциями
-      const result = await croppieInstance.current.result({
-        type: "canvas",
-        size: "viewport",
-        format: "png",
-        quality: 1
-      });
+      // ===== FALLBACK: cached cropped canvas or full source image =====
+      if (!sourceCanvas) {
+        if (croppedCanvasCache) {
+          console.log("🖼️ Using cached cropped canvas");
+          sourceCanvas = croppedCanvasCache;
+        } else {
+          console.log("🖼️ Using full source image");
+          const tempCanvas = document.createElement("canvas");
+          tempCanvas.width = sourceImage.naturalWidth || sourceImage.width;
+          tempCanvas.height = sourceImage.naturalHeight || sourceImage.height;
+          const ctx = tempCanvas.getContext("2d");
+          ctx.drawImage(sourceImage, 0, 0);
+          sourceCanvas = tempCanvas;
+        }
+      }
 
-      // 3. Проверяем и кэшируем результат
-      if (result && result instanceof HTMLCanvasElement) {
-        sourceCanvas = result;
-        setCroppedCanvasCache(result);
-      } else if (typeof result === "string") {
-        // base64 fallback
-        sourceCanvas = await base64ToCanvas(result);
-        setCroppedCanvasCache(sourceCanvas);
+      // ===== Обработка канваса =====
+      if (sourceCanvas) {
+        console.log(
+          "🎨 Processing canvas:",
+          sourceCanvas.width,
+          "x",
+          sourceCanvas.height,
+        );
+        processCanvas(sourceCanvas);
       } else {
-        console.warn("⚠️ Croppie returned invalid result, using cached or fallback");
-        sourceCanvas = croppedCanvasCache;
+        console.error("❌ sourceCanvas is still null after all attempts!");
+        showAlert("Не удалось обработать изображение", "error");
       }
-
-    } catch (e) {
-      console.error("❌ Croppie error:", e.message);
-      sourceCanvas = croppedCanvasCache;
-    }
-  }
-
-  // ===== FALLBACK: cached cropped canvas or full source image =====
-  if (!sourceCanvas) {
-    if (croppedCanvasCache) {
-      console.log("🖼️ Using cached cropped canvas");
-      sourceCanvas = croppedCanvasCache;
-    } else {
-      console.log("🖼️ Using full source image");
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = sourceImage.naturalWidth || sourceImage.width;
-      tempCanvas.height = sourceImage.naturalHeight || sourceImage.height;
-      const ctx = tempCanvas.getContext("2d");
-      ctx.drawImage(sourceImage, 0, 0);
-      sourceCanvas = tempCanvas;
-    }
-  }
-
-  // ===== Обработка канваса =====
-  if (sourceCanvas) {
-    console.log("🎨 Processing canvas:", sourceCanvas.width, "x", sourceCanvas.height);
-    processCanvas(sourceCanvas);
-  } else {
-    console.error("❌ sourceCanvas is still null after all attempts!");
-    showAlert("Не удалось обработать изображение", "error");
-  }
-}, [sourceImage, processCanvas]);
+    },
+    [sourceImage, processCanvas],
+  );
 
   // Автоматическая пикселизация при изменении фильтров (БЕЗ Croppie)
   useEffect(() => {
@@ -427,17 +514,31 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [pixelSize, threshold, invert, brightness, contrast, saturation, sourceImage]);
+  }, [
+    pixelSize,
+    threshold,
+    invert,
+    brightness,
+    contrast,
+    saturation,
+    sourceImage,
+  ]);
 
   // Конвертация в .swaga
   const handleConvertToSwaga = async () => {
     if (!pixelatedPreview || !projectPath) {
-      showAlert("Сначала выберите изображение и дождитесь загрузки проекта", "warning");
+      showAlert(
+        "Сначала выберите изображение и дождитесь загрузки проекта",
+        "warning",
+      );
       return;
     }
 
     if (pixelatedPreview.width > 200) {
-      showAlert(`Ширина узора (${pixelatedPreview.width}) превышает 200 игл! Увеличьте размер пикселя или обрежьте изображение.`, "error");
+      showAlert(
+        `Ширина узора (${pixelatedPreview.width}) превышает 200 игл! Увеличьте размер пикселя или обрежьте изображение.`,
+        "error",
+      );
       return;
     }
 
@@ -469,38 +570,47 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
             ...reversed_rows,
           ].join("\n");
 
-          await invoke("create_dir", { path: `${projectPath}/patterns` }).catch(() => {});
+          await invoke("create_dir", { path: `${projectPath}/patterns` }).catch(
+            () => {},
+          );
           await writeTextFile(outputPath, swagaContent);
 
           try {
-            await invoke("save_conversion", { req: {
-              project_id: parseInt(projectId),
-              source_image_path: sourceImageInfo?.path || "",
-              source_width: sourceImageInfo?.width || 0,
-              source_height: sourceImageInfo?.height || 0,
-              status: "completed",
-            }});
+            await invoke("save_conversion", {
+              req: {
+                project_id: parseInt(projectId),
+                source_image_path: sourceImageInfo?.path || "",
+                source_width: sourceImageInfo?.width || 0,
+                source_height: sourceImageInfo?.height || 0,
+                status: "completed",
+              },
+            });
           } catch (e) {
             console.log("Failed to save conversion to DB:", e);
           }
 
           try {
-            await invoke("save_pattern", { req: {
-              name: patternFileName.replace(".swaga", ""),
-              pattern_type: "pixel_art",
-              width: pixelatedPreview.width,
-              height: pixelatedPreview.height,
-              pattern_data: reversed_rows.join("\n"),
-              category: "converted",
-              source: sourceImageInfo?.path || "",
-            }});
+            await invoke("save_pattern", {
+              req: {
+                name: patternFileName.replace(".swaga", ""),
+                pattern_type: "pixel_art",
+                width: pixelatedPreview.width,
+                height: pixelatedPreview.height,
+                pattern_data: reversed_rows.join("\n"),
+                category: "converted",
+                source: sourceImageInfo?.path || "",
+              },
+            });
           } catch (e) {
             console.log("Failed to save pattern to DB:", e);
           }
 
           // Only show toast if parent doesn't handle onPatternCreated
           if (!onPatternCreated) {
-            showAlert(`Узор создан!\n📐 Размер: ${pixelatedPreview.width}×${pixelatedPreview.height}\n📁 Файл: ${patternFileName}`, "success");
+            showAlert(
+              `Узор создан!\n📐 Размер: ${pixelatedPreview.width}×${pixelatedPreview.height}\n📁 Файл: ${patternFileName}`,
+              "success",
+            );
           }
 
           if (onPatternCreated) {
@@ -511,7 +621,6 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
               file_path: outputPath,
             });
           }
-
         } catch (error) {
           console.error("Conversion failed:", error);
           showAlert(`Ошибка конвертации: ${error.message || error}`, "error");
@@ -526,7 +635,8 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
     <div className="image-converter">
       <h4>🖼️ Конвертер изображений в узор</h4>
       <p className="converter-description">
-        Загрузите изображение, обрежьте, настройте параметры и конвертируйте в .swaga узор
+        Загрузите изображение, обрежьте, настройте параметры и конвертируйте в
+        .swaga узор
       </p>
 
       {/* Выбор изображения */}
@@ -538,7 +648,9 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
         {sourceImageInfo && (
           <div className="source-image-info">
             <span>📄 {sourceImageInfo.path.split("/").pop()}</span>
-            <span>📐 {sourceImageInfo.width}×{sourceImageInfo.height} px</span>
+            <span>
+              📐 {sourceImageInfo.width}×{sourceImageInfo.height} px
+            </span>
           </div>
         )}
       </div>
@@ -576,16 +688,15 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
                       ⭕ Круг
                     </button>
                   </div>
-                  <button
-                    className="btn-reset-crop"
-                    onClick={handleResetCrop}
-                  >
+                  <button className="btn-reset-crop" onClick={handleResetCrop}>
                     ↺ Сбросить
                   </button>
                 </div>
 
                 <div className="viewport-size-control">
-                  <label>Размер области: {viewportSize.width}×{viewportSize.height}px</label>
+                  <label>
+                    Размер области: {viewportSize.width}×{viewportSize.height}px
+                  </label>
                   <div className="viewport-size-sliders">
                     <div className="size-slider-item">
                       <span>Ширина:</span>
@@ -594,7 +705,12 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
                         min="50"
                         max={maxViewportSize.width}
                         value={viewportSize.width}
-                        onChange={(e) => setViewportSize(prev => ({ ...prev, width: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setViewportSize((prev) => ({
+                            ...prev,
+                            width: Number(e.target.value),
+                          }))
+                        }
                       />
                     </div>
                     <div className="size-slider-item">
@@ -604,7 +720,12 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
                         min="50"
                         max={maxViewportSize.height}
                         value={viewportSize.height}
-                        onChange={(e) => setViewportSize(prev => ({ ...prev, height: Number(e.target.value) }))}
+                        onChange={(e) =>
+                          setViewportSize((prev) => ({
+                            ...prev,
+                            height: Number(e.target.value),
+                          }))
+                        }
                       />
                     </div>
                   </div>
@@ -636,7 +757,9 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
             <h5>🎨 Настройки изображения</h5>
             <div className="settings-grid">
               <div className="setting-item">
-                <label>Яркость: {brightness > 0 ? `+${brightness}` : brightness}</label>
+                <label>
+                  Яркость: {brightness > 0 ? `+${brightness}` : brightness}
+                </label>
                 <input
                   type="range"
                   min="-100"
@@ -646,7 +769,9 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
                 />
               </div>
               <div className="setting-item">
-                <label>Контраст: {contrast > 0 ? `+${contrast}` : contrast}</label>
+                <label>
+                  Контраст: {contrast > 0 ? `+${contrast}` : contrast}
+                </label>
                 <input
                   type="range"
                   min="-100"
@@ -656,7 +781,9 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
                 />
               </div>
               <div className="setting-item">
-                <label>Насыщенность: {saturation > 0 ? `+${saturation}` : saturation}</label>
+                <label>
+                  Насыщенность: {saturation > 0 ? `+${saturation}` : saturation}
+                </label>
                 <input
                   type="range"
                   min="-100"
@@ -712,8 +839,18 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
             {/* Информация о результате */}
             {pixelatedPreview && (
               <div className="result-info">
-                <span>📐 Результат: <strong>{pixelatedPreview.width}×{pixelatedPreview.height}</strong> пикселей</span>
-                <span>🧶 Чанков: <strong>{Math.ceil(pixelatedPreview.height / 4)}</strong> (по 4 ряда)</span>
+                <span>
+                  📐 Результат:{" "}
+                  <strong>
+                    {pixelatedPreview.width}×{pixelatedPreview.height}
+                  </strong>{" "}
+                  пикселей
+                </span>
+                <span>
+                  🧶 Чанков:{" "}
+                  <strong>{Math.ceil(pixelatedPreview.height / 4)}</strong> (по
+                  4 ряда)
+                </span>
               </div>
             )}
           </div>
@@ -731,7 +868,9 @@ const pixelateImage = useCallback(async (useCroppie = true) => {
             <button
               className="btn-convert-to-swaga"
               onClick={handleConvertToSwaga}
-              disabled={converting || !pixelatedPreview || pixelatedPreview.width > 200}
+              disabled={
+                converting || !pixelatedPreview || pixelatedPreview.width > 200
+              }
             >
               {converting ? "⏳ Конвертация..." : "💾 Конвертировать в .swaga"}
             </button>
