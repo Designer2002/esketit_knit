@@ -15,7 +15,6 @@ export const useBlueprint = () => {
 export const BlueprintProvider = ({ children }) => {
   // widestWidth — это максимальная ширина полотна, необходимая для датчиков
   const [widestWidth, setWidestWidth] = useState(0);
-
   return (
     <BlueprintContext.Provider value={{ widestWidth, setWidestWidth }}>
       {children}

@@ -1,11 +1,15 @@
-use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
-use serde_json::json;
-use hyper::{Method, Request, Response, StatusCode, server::{self, conn::http1}, service::service_fn};
-use hyper_util::rt::TokioIo;
-use http_body_util::Full;
 use bytes::Bytes;
+use http_body_util::Full;
+use hyper::{
+    server::{self, conn::http1},
+    service::service_fn,
+    Method, Request, Response, StatusCode,
+};
+use hyper_util::rt::TokioIo;
+use serde_json::json;
 use std::net::SocketAddr;
+use std::sync::{Arc, LazyLock};
+use tokio::sync::{Mutex, RwLock, Notify};
 
 use crate::utilities::KnitPattern;
 
@@ -22,6 +26,7 @@ pub struct HttpServerState {
     pub is_running: Arc<Mutex<bool>>,
     pub server_ip: Arc<RwLock<String>>,
     pub restart_flag: Arc<Mutex<bool>>,
+    pub shutdown: Arc<Notify>,
 }
 
 impl HttpServerState {
@@ -38,12 +43,13 @@ impl HttpServerState {
             is_running: Arc::new(Mutex::new(false)),
             server_ip: Arc::new(RwLock::new(String::new())),
             restart_flag: Arc::new(Mutex::new(false)),
+            shutdown: Arc::new(Notify::new()),
         }
     }
 }
 
 // Глобальное состояние сервера
-static SERVER_STATE: once_cell::sync::Lazy<Arc<RwLock<Option<Arc<HttpServerState>>>>> = 
+static SERVER_STATE: once_cell::sync::Lazy<Arc<RwLock<Option<Arc<HttpServerState>>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(None)));
 
 /// Запуск HTTP сервера для ESP32
@@ -77,10 +83,7 @@ pub async fn start_esp32_http_server(
         height: pattern_height,
     };
 
-    let state = Arc::new(HttpServerState::new(
-        pattern,
-        chunk_size.unwrap_or(4),
-    ));
+    let state = Arc::new(HttpServerState::new(pattern, chunk_size.unwrap_or(4)));
 
     let port = port.unwrap_or(6666);
 
@@ -106,20 +109,20 @@ pub async fn start_esp32_http_server(
             Ok(l) => l,
             Err(e) => {
                 eprintln!("❌ Ошибка запуска сервера: {}", e);
-                
+
                 // Если адрес занят, очищаем состояние и пробуем снова
                 if e.kind() == std::io::ErrorKind::AddrInUse {
                     println!("🔄 Адрес занят, очищаем состояние и пробуем снова...");
-                    
+
                     // Очищаем состояние
                     {
                         let mut state = SERVER_STATE.write().await;
                         *state = None;
                     }
-                    
+
                     // Ждём освобождения порта
                     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                    
+
                     // Пробуем снова
                     match tokio::net::TcpListener::bind(addr).await {
                         Ok(l) => l,
@@ -136,32 +139,47 @@ pub async fn start_esp32_http_server(
         };
 
         loop {
-            match listener.accept().await {
-                Ok((stream, addr)) => {
-                    println!("✅ ESP32 подключился: {}", addr);
-                    let io = TokioIo::new(stream);
-                    let state = state_clone.clone();
+            tokio::select! {
+                accept = listener.accept() => {
+                    match accept {
+                        Ok((stream, addr)) => {
+                            println!("✅ ESP32 подключился: {}", addr);
+                            let io = TokioIo::new(stream);
+                            let state = state_clone.clone();
 
-                    tokio::spawn(async move {
-                        if let Err(err) = http1::Builder::new()
-                            .serve_connection(
-                                io,
-                                service_fn(move |req| handle_request(req, state.clone())),
-                            )
-                            .await
-                        {
-                            eprintln!("❌ Ошибка соединения: {:?}", err);
+                            tokio::spawn(async move {
+                                if let Err(err) = http1::Builder::new()
+                                    .serve_connection(
+                                        io,
+                                        service_fn(move |req| handle_request(req, state.clone())),
+                                    )
+                                    .await
+                                {
+                                    eprintln!("❌ Ошибка соединения: {:?}", err);
+                                }
+                            });
                         }
-                    });
+                        Err(e) => {
+                            eprintln!("❌ Ошибка подключения: {}", e);
+                        }
+                    }
                 }
-                Err(e) => {
-                    eprintln!("❌ Ошибка подключения: {}", e);
+                // if shutdown notified, break loop and stop accepting
+                _ = state_clone.shutdown.notified() => {
+                    println!("🛑 Shutdown signal received, stopping HTTP listener");
+                    break;
                 }
             }
         }
+        // mark stopped
+        *state_clone.is_running.lock().await = false;
+        println!("🛑 HTTP listener task exited");
     });
 
-    Ok(format!("HTTP сервер запущен на http://{}:{}", server_ip_clone, port))
+    Ok(format!(
+        "HTTP сервер запущен на http://{}:{}",
+        server_ip_clone, port
+    ))
 }
 
 /// Обработка HTTP запросов от ESP32
@@ -185,6 +203,10 @@ async fn handle_request(
         handle_check_restart_request(state.clone()).await
     } else if method == Method::POST && path == "/set_restart" {
         handle_set_restart_request(state.clone()).await
+    } else if method == Method::POST && path == "/solenoid_hits" {
+        handle_solenoid_hits_post(req, state.clone()).await
+    } else if method == Method::GET && path == "/solenoid_hits" {
+        handle_solenoid_hits_get().await
     } else {
         Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -196,8 +218,14 @@ async fn handle_request(
     {
         let headers = response.headers_mut();
         headers.insert("Access-Control-Allow-Origin", "*".parse().unwrap());
-        headers.insert("Access-Control-Allow-Methods", "GET, OPTIONS".parse().unwrap());
-        headers.insert("Access-Control-Allow-Headers", "Content-Type".parse().unwrap());
+        headers.insert(
+            "Access-Control-Allow-Methods",
+            "GET, OPTIONS".parse().unwrap(),
+        );
+        headers.insert(
+            "Access-Control-Allow-Headers",
+            "Content-Type".parse().unwrap(),
+        );
     }
 
     Ok(response)
@@ -219,7 +247,10 @@ async fn handle_row_info_request(
     *state.current_row.lock().await = row;
     *state.current_direction.lock().await = direction.clone();
 
-    println!("📊 Текущий статус: ряд {}/{}, направление {}", row, state.total_rows, direction);
+    println!(
+        "📊 Текущий статус: ряд {}/{}, направление {}",
+        row, state.total_rows, direction
+    );
 
     Response::builder()
         .status(StatusCode::OK)
@@ -229,14 +260,17 @@ async fn handle_row_info_request(
                 "success": true,
                 "row": row,
                 "direction": direction
-            }).to_string().into_bytes()
+            })
+            .to_string()
+            .into_bytes(),
         )))
         .unwrap()
 }
 
 /// Парсинг строкового параметра из query
 fn parse_query_param_str(query: &str, key: &str) -> Option<String> {
-    query.split('&')
+    query
+        .split('&')
         .find(|pair| pair.starts_with(&format!("{}=", key)))
         .and_then(|pair| pair.split('=').nth(1))
         .map(|v| v.to_string())
@@ -261,11 +295,13 @@ async fn handle_chunk_request(
 
     // Получаем максимальный отправленный ряд
     let mut max_sent = state.max_sent_row.lock().await;
-    
+
     // Если ESP32 запрашивает ряд который уже был отправлен - используем следующий ряд
     let start_row = if requested_row < *max_sent {
-        println!("⚠️ ESP32 запросил уже отправленный ряд {} (max_sent={}), отправляем ряд {}", 
-                 requested_row, *max_sent, *max_sent);
+        println!(
+            "⚠️ ESP32 запросил уже отправленный ряд {} (max_sent={}), отправляем ряд {}",
+            requested_row, *max_sent, *max_sent
+        );
         *max_sent
     } else {
         requested_row
@@ -282,9 +318,11 @@ async fn handle_chunk_request(
                     "rows": [],
                     "start_row": start_row,
                     "complete": true
-                }).to_string().into_bytes()
+                })
+                .to_string()
+                .into_bytes(),
             )))
-            .unwrap()
+            .unwrap();
     }
 
     // Берём chunk_size рядов начиная с start_row (БЕЗ зеркалирования!)
@@ -294,13 +332,18 @@ async fn handle_chunk_request(
         .map(|row| row.iter().map(|&b| if b { 1 } else { 0 }).collect())
         .collect();
 
-    println!("📤 Отправка чанка: ряды {}-{} (ширина={}), БЕЗ зеркалирования", start_row, end_row - 1, pattern.width);
+    println!(
+        "📤 Отправка чанка: ряды {}-{} (ширина={}), БЕЗ зеркалирования",
+        start_row,
+        end_row - 1,
+        pattern.width
+    );
 
     // Обновляем максимальный отправленный ряд
     *max_sent = end_row;
     drop(max_sent); // Освобождаем lock
 
-    // НЕ обновляем current_row здесь! 
+    // НЕ обновляем current_row здесь!
     // current_row обновляется ТОЛЬКО из /row_info запросов от ESP32
     // Это предотвращает "откат" ряда когда polling получает старое значение
 
@@ -317,7 +360,9 @@ async fn handle_chunk_request(
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .body(Full::new(Bytes::from(response_json.to_string().into_bytes())))
+        .body(Full::new(Bytes::from(
+            response_json.to_string().into_bytes(),
+        )))
         .unwrap()
 }
 
@@ -340,7 +385,10 @@ async fn handle_ready_request(
         0
     };
 
-    println!("📊 Прогресс: {}/{} рядов ({}%)", current, state.total_rows, progress);
+    println!(
+        "📊 Прогресс: {}/{} рядов ({}%)",
+        current, state.total_rows, progress
+    );
 
     Response::builder()
         .status(StatusCode::OK)
@@ -351,7 +399,9 @@ async fn handle_ready_request(
                 "current_row": current,
                 "total_rows": state.total_rows,
                 "progress_percent": progress
-            }).to_string().into_bytes()
+            })
+            .to_string()
+            .into_bytes(),
         )))
         .unwrap()
 }
@@ -379,7 +429,9 @@ async fn handle_status_request(state: Arc<HttpServerState>) -> Response<Full<Byt
                 "progress_percent": progress,
                 "server_ip": server_ip,
                 "chunk_size": state.chunk_size
-            }).to_string().into_bytes()
+            })
+            .to_string()
+            .into_bytes(),
         )))
         .unwrap()
 }
@@ -398,7 +450,7 @@ async fn handle_check_restart_request(state: Arc<HttpServerState>) -> Response<F
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
         .body(Full::new(Bytes::from(
-            json!({ "restart": restart }).to_string().into_bytes()
+            json!({ "restart": restart }).to_string().into_bytes(),
         )))
         .unwrap()
 }
@@ -413,7 +465,9 @@ async fn handle_set_restart_request(state: Arc<HttpServerState>) -> Response<Ful
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
         .body(Full::new(Bytes::from(
-            json!({ "success": true, "restart": true }).to_string().into_bytes()
+            json!({ "success": true, "restart": true })
+                .to_string()
+                .into_bytes(),
         )))
         .unwrap()
 }
@@ -430,6 +484,16 @@ fn parse_query_param(query: &str, param_name: &str) -> Option<usize> {
 /// Остановка HTTP сервера
 #[tauri::command]
 pub async fn stop_esp32_http_server() -> Result<String, String> {
+    // Попробуем аккуратно остановить сервер: уведомим shutdown, подождём и затем очистим состояние
+    {
+        let guard = SERVER_STATE.read().await;
+        if let Some(state) = &*guard {
+            state.shutdown.notify_waiters();
+        }
+    }
+    // Даем задаче немного времени завершиться
+    tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
     // Сбрасываем состояние
     *SERVER_STATE.write().await = None;
     Ok("HTTP сервер остановлен".to_string())
@@ -452,7 +516,7 @@ pub async fn get_esp32_http_server_status() -> Result<String, String> {
                 is_running, server_ip, current, total, direction
             ))
         }
-        None => Ok("Server not running".to_string())
+        None => Ok("Server not running".to_string()),
     }
 }
 
@@ -482,7 +546,7 @@ pub async fn get_current_row_info() -> Result<serde_json::Value, String> {
             "total": 0,
             "is_esp_connected": false,
             "max_sent_row": 0
-        }))
+        })),
     }
 }
 
@@ -497,16 +561,21 @@ pub async fn restore_knitting_progress(
     let state_guard = SERVER_STATE.read().await;
     if let Some(state) = &*state_guard {
         let total_rows = state.total_rows;
-        
+
         // Обновляем текущий ряд
         *state.current_row.lock().await = current_row;
         *state.current_direction.lock().await = current_direction.clone();
         *state.max_sent_row.lock().await = max_sent_row;
 
-        println!("🔄 Прогресс восстановлен: проект {}, ряд {}/{}, направление {}, max_sent={}",
-                 project_id, current_row, total_rows, current_direction, max_sent_row);
+        println!(
+            "🔄 Прогресс восстановлен: проект {}, ряд {}/{}, направление {}, max_sent={}",
+            project_id, current_row, total_rows, current_direction, max_sent_row
+        );
 
-        Ok(format!("Прогресс восстановлен: ряд {}/{}", current_row, total_rows))
+        Ok(format!(
+            "Прогресс восстановлен: ряд {}/{}",
+            current_row, total_rows
+        ))
     } else {
         Err("Сервер не запущен".to_string())
     }
@@ -532,7 +601,10 @@ pub async fn reset_knitting_progress() -> Result<serde_json::Value, String> {
             .map(|row| row.iter().map(|&b| if b { 1 } else { 0 }).collect())
             .collect();
 
-        println!("🔄 Сброс прогресса: отправляем ряды 0-{} с флагом reset", end_row - 1);
+        println!(
+            "🔄 Сброс прогресса: отправляем ряды 0-{} с флагом reset",
+            end_row - 1
+        );
 
         // Возвращаем чанк с флагом reset
         Ok(json!({
@@ -589,4 +661,193 @@ pub async fn send_esp_restart_signal() -> Result<(), String> {
     } else {
         Err("HTTP сервер не запущен".to_string())
     }
+}
+
+/// Структура одного хита на сервере (свёрка с паттерном)
+#[derive(Debug, Clone, serde::Serialize)]
+struct ServerSolenoidHit {
+    row: i32,
+    needle: i32,
+    actual_fire: bool,
+    should_fire: bool,
+    is_correct: bool,
+    miss: bool,      // должен был, но нет
+    false_pos: bool, // сработал зря
+    direction: String,
+}
+
+/// Глобальный буфер хитов (хранит последние N)
+static SOLENOID_HITS_SERVER: LazyLock<Arc<RwLock<Vec<ServerSolenoidHit>>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(Vec::new())));
+
+const MAX_STORED_HITS: usize = 20_000; // ~2 MB
+
+/// POST /solenoid_hits — ESP32 присылает пачку
+async fn handle_solenoid_hits_post(
+    req: Request<hyper::body::Incoming>,
+    state: Arc<HttpServerState>,
+) -> Response<Full<Bytes>> {
+    use http_body_util::BodyExt;
+
+    let body = match req.collect().await {
+        Ok(b) => b.to_bytes(),
+        Err(_) => {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from("bad body")))
+                .unwrap();
+        }
+    };
+
+    let body_str = String::from_utf8_lossy(&body);
+    let json: serde_json::Value = match serde_json::from_str(&body_str) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("❌ Failed to parse solenoid_hits JSON: {}", e);
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from("bad json")))
+                .unwrap();
+        }
+    };
+
+    // Получаем паттерн для сверки
+    let pattern = state.pattern.read().await;
+    let mut new_hits: Vec<ServerSolenoidHit> = Vec::new();
+    if let Some(hits_arr) = json.get("hits").and_then(|v| v.as_array()) {
+        for hit in hits_arr {
+            let row = hit.get("r").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let needle = hit.get("n").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            // treat f == 0 as fired (ESP sends 0 for fired)
+            let actual_fire = hit.get("f").and_then(|v| v.as_i64()).unwrap_or(0) == 0;
+            let dir_num = hit.get("d").and_then(|v| v.as_i64()).unwrap_or(1);
+
+            // bounds-check: skip obviously invalid hits
+            if row < 0 || needle < 0 {
+                eprintln!("Skipping negative hit: row={}, needle={}", row, needle);
+                continue;
+            }
+            let pattern_row = row as usize;
+            if pattern_row >= pattern.height || (needle as usize) >= pattern.width {
+                eprintln!("Skipping out-of-bounds hit: row={}, needle={}", row, needle);
+                continue;
+            }
+
+            // Сверяем с паттерном: row (глобальный) → индекс в паттерне
+            let should_fire = !pattern.rows[pattern_row][needle as usize];
+
+            let is_correct = should_fire == actual_fire;
+            let miss = should_fire && !actual_fire;
+            let false_pos = !should_fire && actual_fire;
+
+            new_hits.push(ServerSolenoidHit {
+                row,
+                needle,
+                actual_fire,
+                should_fire,
+                is_correct,
+                miss,
+                false_pos,
+                direction: if dir_num == 1 { "right".into() } else { "left".into() },
+            });
+        }
+    }
+
+    // Deduplicate (keep last event per row/needle/direction) to reduce noise from retries
+    {
+        use std::collections::HashSet;
+        let mut seen: HashSet<(i32, i32, String)> = HashSet::new();
+        let mut deduped: Vec<ServerSolenoidHit> = Vec::new();
+        // iterate from the end so the latest occurrence wins
+        for h in new_hits.into_iter().rev() {
+            let key = (h.row, h.needle, h.direction.clone());
+            if seen.insert(key) {
+                deduped.push(h);
+            }
+        }
+        deduped.reverse();
+
+        let received = deduped.len();
+        println!("📥 /solenoid_hits received {} valid hits", received);
+
+        // Добавляем в глобальный буфер
+        let mut buf = SOLENOID_HITS_SERVER.write().await;
+        buf.extend(deduped.clone());
+        // Оставляем только последние MAX_STORED_HITS
+        if buf.len() > MAX_STORED_HITS {
+            let excess = buf.len() - MAX_STORED_HITS;
+            buf.drain(0..excess);
+        }
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Full::new(Bytes::from(
+                json!({ "received": received }).to_string().into_bytes(),
+            )))
+            .unwrap()
+    }
+}
+
+// GET /solenoid_hits?min_row=N&max_row=M — фронтенд забирает хиты
+async fn handle_solenoid_hits_get() -> Response<Full<Bytes>> {
+    let buf = SOLENOID_HITS_SERVER.read().await;
+    
+    // Статистика
+    let total = buf.len();
+    let misses: usize = buf.iter().filter(|h| h.miss).count();
+    let false_pos: usize = buf.iter().filter(|h| h.false_pos).count();
+    let correct: usize = buf.iter().filter(|h| h.is_correct).count();
+    
+    let response = json!({
+        "hits": *buf,
+        "stats": {
+            "total": total,
+            "correct": correct,
+            "misses": misses,
+            "false_positives": false_pos,
+            "accuracy_pct": if total > 0 { (correct as f64 / total as f64 * 100.0).round() } else { 100.0 }
+        }
+    });
+    
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(response.to_string().into_bytes())))
+        .unwrap()
+}
+
+/// Получить данные solenoid hits напрямую (для фронтенда через invoke)
+/// Читает глобальный буфер SOLENOID_HITS_SERVER, без HTTP-запроса
+#[tauri::command]
+pub async fn get_solenoid_hits_data() -> Result<serde_json::Value, String> {
+    let buf = SOLENOID_HITS_SERVER.read().await;
+    
+    let total = buf.len();
+    let misses: usize = buf.iter().filter(|h| h.miss).count();
+    let false_pos: usize = buf.iter().filter(|h| h.false_pos).count();
+    let correct: usize = buf.iter().filter(|h| h.is_correct).count();
+    
+    Ok(json!({
+        "hits": &*buf,
+        "stats": {
+            "total": total,
+            "correct": correct,
+            "misses": misses,
+            "false_positives": false_pos,
+            "accuracy_pct": if total > 0 { 
+                (correct as f64 / total as f64 * 100.0).round() 
+            } else { 
+                100.0 
+            }
+        }
+    }))
+}
+
+/// Очистить буфер solenoid hits (например, при сбросе прогресса)
+#[tauri::command]
+pub async fn clear_solenoid_hits() -> Result<String, String> {
+    let mut buf = SOLENOID_HITS_SERVER.write().await;
+    buf.clear();
+    Ok("Solenoid hits buffer cleared".to_string())
 }

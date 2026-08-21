@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import "./KnittingTab.css";
 import esp_connect from "../assets/sounds/esp_connect.mp3";
 import knit_complete from "../assets/sounds/knit_complete.mp3";
-import { useBlueprint } from "../context/BlueprintContext";
 
 export default function KnittingTab({
   projectId,
@@ -19,10 +18,21 @@ export default function KnittingTab({
   const [projectPath, setProjectPath] = useState(null);
   const [patterns, setPatterns] = useState([]);
   const [showPatternGallery, setShowPatternGallery] = useState(false);
+  // === ТЕСТ НА СООТВЕТСТВИЕ DOB ===
+  const [solenoidHits, setSolenoidHits] = useState([]);
+  const [hitStats, setHitStats] = useState({
+    total: 0,
+    correct: 0,
+    misses: 0,
+    false_positives: 0,
+    accuracy_pct: 100,
+  });
+  const [showTestPanel, setShowTestPanel] = useState(false);
+  const testCanvasRef = useRef(null);
+  const solenoidIntervalRef = useRef(null);
 
   // Настройки цветов паттерна
   const [patternColors, setPatternColors] = useState(() => {
-    // Загружаем сохранённые цвета из localStorage
     const saved = localStorage.getItem("patternColors");
     return saved
       ? JSON.parse(saved)
@@ -32,9 +42,8 @@ export default function KnittingTab({
         };
   });
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const [previewKey, setPreviewKey] = useState(0); // Для принудительной перерисовки canvas
+  const [previewKey, setPreviewKey] = useState(0);
 
-  // Сохранение цветов при изменении
   useEffect(() => {
     localStorage.setItem("patternColors", JSON.stringify(patternColors));
   }, [patternColors]);
@@ -45,9 +54,9 @@ export default function KnittingTab({
     port: 6666,
     serverIp: "",
     connected: false,
-    isEspConnected: false, // ESP32 подключился хотя бы раз
+    isEspConnected: false,
     currentRow: 0,
-    currentDirection: "right", // "left" или "right"
+    currentDirection: "right",
     totalRows: 0,
     progressPercent: 0,
     chunksSent: 0,
@@ -57,20 +66,15 @@ export default function KnittingTab({
   const [computerIp, setComputerIp] = useState("");
   const canvasRef = useRef(null);
   const statusIntervalRef = useRef(null);
-  const hasShownCompletionNotification = useRef(false); // Чтобы показать уведомление только один раз
-  const hasPlayedConnectSound = useRef(false); // Чтобы звук подключения сыграл только один раз
+  const hasShownCompletionNotification = useRef(false);
+  const hasPlayedConnectSound = useRef(false);
 
-  // Toast уведомления
   const [toasts, setToasts] = useState([]);
-
-  // Звуки
   const connectSoundRef = useRef(null);
   const completeSoundRef = useRef(null);
 
-  // Сохранённый прогресс вязания
   const [savedProgress, setSavedProgress] = useState(null);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
-  // Modal
   const [modal, setModal] = useState({
     isOpen: false,
     title: "",
@@ -107,6 +111,7 @@ export default function KnittingTab({
       cancelText,
     });
   };
+
   const showAlert = (message, type = "info") => {
     showModal({
       title:
@@ -116,7 +121,6 @@ export default function KnittingTab({
     });
   };
 
-  // Получение IP компьютера при загрузке
   useEffect(() => {
     const fetchIp = async () => {
       try {
@@ -130,28 +134,21 @@ export default function KnittingTab({
     fetchIp();
   }, []);
 
-  // Загрузка звуков
   useEffect(() => {
-    // Звук подключения ESP
     connectSoundRef.current = new Audio(esp_connect);
     connectSoundRef.current.volume = 0.5;
-
-    // Звук завершения вязания
     completeSoundRef.current = new Audio(knit_complete);
     completeSoundRef.current.volume = 0.7;
   }, []);
 
-  // Функция добавления toast-уведомления
   const addToast = useCallback((message, type = "info", duration = 4000) => {
     const id = `knitting-toast-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
-
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, duration);
   }, []);
 
-  // Функция воспроизведения звука
   const playSound = useCallback((soundRef) => {
     if (soundRef && soundRef.current) {
       soundRef.current.currentTime = 0;
@@ -159,7 +156,6 @@ export default function KnittingTab({
     }
   }, []);
 
-  // Send ESP restart signal when pattern changes while server is running
   useEffect(() => {
     if (patternData && httpServer.running) {
       invoke("send_esp_restart_signal").catch((e) => {
@@ -168,113 +164,60 @@ export default function KnittingTab({
     }
   }, [patternData, httpServer.running]);
 
-  // Отрисовка паттерна на canvas
   const drawPatternPreview = useCallback(
     (rows, width, height, currentRow = 0, direction = "right") => {
-      console.log("🎨 drawPatternPreview called:", {
-        rows: rows?.length,
-        width,
-        height,
-        currentRow,
-        direction,
-      });
       const canvas = canvasRef.current;
-      if (!canvas) {
-        console.warn("⚠️ canvasRef.current is null!");
-        return;
-      }
-      if (!rows || rows.length === 0) {
-        console.warn("⚠️ rows is empty!");
-        return;
-      }
+      if (!canvas) return;
+      if (!rows || rows.length === 0) return;
 
       const ctx = canvas.getContext("2d");
       const maxCanvasSize = 400;
-
-      // Рассчитываем размер ячейки так, чтобы паттерн влезал в canvas
       const cellSize = Math.max(
         1,
         Math.floor(maxCanvasSize / Math.max(width, height)),
       );
-      console.log(
-        "📐 cellSize:",
-        cellSize,
-        "canvas:",
-        width * cellSize,
-        "x",
-        height * cellSize,
-      );
 
-      // Устанавливаем размер canvas по размеру паттерна
       canvas.width = Math.min(width * cellSize, maxCanvasSize);
       canvas.height = Math.min(height * cellSize, maxCanvasSize);
 
-      // Очистка
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Рассчитываем видимую область для больших паттернов
       const visibleWidth = Math.floor(canvas.width / cellSize);
       const visibleHeight = Math.floor(canvas.height / cellSize);
       const startX = Math.max(0, Math.floor((width - visibleWidth) / 2));
       const startY = Math.max(0, Math.floor((height - visibleHeight) / 2));
 
-      console.log(
-        "🔍 Drawing",
-        visibleWidth,
-        "x",
-        visibleHeight,
-        "pixels from",
-        startX,
-        startY,
-      );
-
-      // Отрисовка рядов с вертикальным флипом для превью
-      let pixelsDrawn = 0;
       for (let y = 0; y < visibleHeight && startY + y < height; y++) {
-        // Инвертируем индекс ряда: 0 → последний, height-1 → первый
         const visualY = height - 1 - (startY + y);
         const row = rows[visualY];
         if (!row) continue;
 
         for (let x = 0; x < visibleWidth && startX + x < width; x++) {
           const pixelIndex = startX + x;
-          if (row[pixelIndex]) {
-            ctx.fillStyle = patternColors.dark;
-          } else {
-            ctx.fillStyle = patternColors.light;
-          }
-          // Y рисуем как есть — canvas уже рисует сверху вниз, а мы инвертировали источник
+          ctx.fillStyle = row[pixelIndex]
+            ? patternColors.dark
+            : patternColors.light;
           ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-          pixelsDrawn++;
         }
       }
 
-      console.log("✅ Drew", pixelsDrawn, "pixels");
-
-      // Подсветка текущей позиции с направлением
       if (currentRow > 0) {
         const visualRow = height - currentRow;
         const adjustedRow = visualRow - startY;
         const yPos = adjustedRow * cellSize;
 
         if (yPos >= 0 && yPos <= canvas.height) {
-          // Цвет линии зависит от направления
           ctx.strokeStyle = direction === "right" ? "#22c55e" : "#3b82f6";
           ctx.lineWidth = 3;
-
-          // Рисуем линию
           ctx.beginPath();
           ctx.moveTo(0, yPos);
           ctx.lineTo(canvas.width, yPos);
           ctx.stroke();
 
-          // Рисуем стрелку направления
           const arrowSize = 10;
           ctx.fillStyle = direction === "right" ? "#22c55e" : "#3b82f6";
-
           if (direction === "right") {
-            // Стрелка вправо
             ctx.beginPath();
             ctx.moveTo(canvas.width - 5, yPos);
             ctx.lineTo(canvas.width - 5 - arrowSize, yPos - arrowSize / 2);
@@ -282,7 +225,6 @@ export default function KnittingTab({
             ctx.closePath();
             ctx.fill();
           } else {
-            // Стрелка влево
             ctx.beginPath();
             ctx.moveTo(5, yPos);
             ctx.lineTo(5 + arrowSize, yPos - arrowSize / 2);
@@ -291,7 +233,6 @@ export default function KnittingTab({
             ctx.fill();
           }
 
-          // Текст с номером ряда
           ctx.fillStyle = "#000";
           ctx.font = "bold 11px sans-serif";
           ctx.fillText(
@@ -302,7 +243,6 @@ export default function KnittingTab({
         }
       }
 
-      // Добавляем информацию о масштабе для больших паттернов
       if (width > visibleWidth || height > visibleHeight) {
         ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
         ctx.font = "12px sans-serif";
@@ -316,29 +256,23 @@ export default function KnittingTab({
     [patternColors],
   );
 
-  // Ключ для localStorage (уникальный для каждого проекта)
   const getProgressKey = useCallback(() => {
     return `knitting_progress_${projectId}`;
   }, [projectId]);
 
-  // Загрузка сохранённого прогресса при монтировании
   useEffect(() => {
     if (!projectId || !patternData) return;
-
     const key = getProgressKey();
     const saved = localStorage.getItem(key);
     if (saved) {
       try {
         const progress = JSON.parse(saved);
-        // Проверяем что прогресс актуален (тот же проект и тот же узор)
         if (
           progress.patternWidth === patternData.width &&
           progress.patternHeight === patternData.height
         ) {
           setSavedProgress(progress);
-          console.log("📂 Найден сохранённый прогресс:", progress);
         } else {
-          console.log("🗑️ Найденный прогресс не актуален, удаляем");
           localStorage.removeItem(key);
           setSavedProgress(null);
         }
@@ -350,13 +284,11 @@ export default function KnittingTab({
     }
   }, [projectId, patternData?.width, patternData?.height, getProgressKey]);
 
-  // Сохранить прогресс
   const saveProgress = useCallback(() => {
     if (!patternData || !httpServer.running) {
       showAlert("Сначала запустите вязание", "warning");
       return;
     }
-
     const progress = {
       currentRow: httpServer.currentRow,
       currentDirection: httpServer.currentDirection,
@@ -366,28 +298,16 @@ export default function KnittingTab({
       patternHeight: patternData.height,
       savedAt: new Date().toISOString(),
     };
-
     const key = getProgressKey();
     localStorage.setItem(key, JSON.stringify(progress));
     setSavedProgress(progress);
-
     addToast(
       `💾 Прогресс сохранён! Ряд ${progress.currentRow}/${progress.totalRows}`,
       "success",
       4000,
     );
-    console.log("💾 Прогресс сохранён:", progress);
-  }, [
-    patternData,
-    httpServer.running,
-    httpServer.currentRow,
-    httpServer.currentDirection,
-    httpServer.maxSentRow,
-    httpServer.totalRows,
-    getProgressKey,
-    addToast,
-    showAlert,
-  ]);
+  }, [patternData, httpServer, getProgressKey, addToast, showAlert]);
+
   const showConfirm = useCallback(
     ({
       title,
@@ -410,13 +330,12 @@ export default function KnittingTab({
     },
     [showModal],
   );
-  // Восстановить прогресс
+
   const restoreProgress = useCallback(() => {
     if (!savedProgress) {
       showAlert("Нет сохранённого прогресса", "warning");
       return;
     }
-
     showConfirm({
       title: "🔄 Восстановить прогресс?",
       message: `Продолжить вязание с ряда ${savedProgress.currentRow}/${savedProgress.totalRows}?\n\nНаправление: ${savedProgress.currentDirection === "right" ? "→ вправо" : "← влево"}\nСохранено: ${new Date(savedProgress.savedAt).toLocaleString("ru-RU")}`,
@@ -424,7 +343,6 @@ export default function KnittingTab({
       cancelText: "Отмена",
       onConfirm: async () => {
         try {
-          // Обновляем локальное состояние
           setHttpServer((prev) => ({
             ...prev,
             running: true,
@@ -438,7 +356,6 @@ export default function KnittingTab({
             serverIp: computerIp,
           }));
 
-          // Перерисовываем превью
           if (patternData) {
             drawPatternPreview(
               patternData.rows,
@@ -449,39 +366,18 @@ export default function KnittingTab({
             );
           }
 
-          // Запускаем сервер
+          // Сначала останавливаем старый сервер
+          await invoke("stop_esp32_http_server").catch(() => {});
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           const result = await invoke("start_esp32_http_server", {
             patternRows: patternData.rows,
             patternWidth: patternData.width,
             patternHeight: patternData.height,
             chunkSize: 4,
             port: 6666,
-          }).catch(async (err) => {
-            // Если сервер не запустился из-за занятого порта, пробуем перезапустить
-            if (err.message && err.message.includes("Address already in use")) {
-              console.log("🔄 Порт занят, пробуем перезапустить сервер...");
-
-              // Останавливаем старый сервер
-              await invoke("stop_esp32_http_server").catch(() => {});
-
-              // Ждём немного
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-
-              // Пробуем снова
-              return await invoke("start_esp32_http_server", {
-                patternRows: patternData.rows,
-                patternWidth: patternData.width,
-                patternHeight: patternData.height,
-                chunkSize: 4,
-                port: 6666,
-              });
-            }
-            throw err;
           });
 
-          console.log("HTTP server started:", result);
-
-          // Восстанавливаем прогресс на сервере
           await invoke("restore_knitting_progress", {
             projectId: parseInt(projectId),
             currentRow: savedProgress.currentRow,
@@ -489,14 +385,7 @@ export default function KnittingTab({
             maxSentRow: savedProgress.maxSentRow,
           });
 
-          console.log(
-            "🔄 Прогресс восстановлен на сервере: ряд",
-            savedProgress.currentRow,
-          );
-
-          // Запускаем опрос статуса
           startStatusPolling();
-
           addToast(
             `Прогресс восстановлен! Ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`,
             "success",
@@ -520,9 +409,9 @@ export default function KnittingTab({
     showAlert,
     showConfirm,
     computerIp,
+    projectId,
   ]);
 
-  // Удалить сохранённый прогресс
   const deleteSavedProgress = useCallback(() => {
     const key = getProgressKey();
     localStorage.removeItem(key);
@@ -531,13 +420,11 @@ export default function KnittingTab({
     addToast("🗑️ Сохранённый прогресс удалён", "info", 3000);
   }, [getProgressKey, addToast]);
 
-  // Сбросить прогресс (отправить ESP32 чанк с reset: true)
   const resetProgress = useCallback(() => {
     if (!httpServer.running) {
       showAlert("Сначала запустите вязание", "warning");
       return;
     }
-
     showConfirm({
       title: "⚠️ Сбросить прогресс вязания?",
       message: `Это отправит ESP32 команду сброса и начнёт вязание сначала!\n\nТекущий ряд: ${httpServer.currentRow}/${httpServer.totalRows}\n\nВсе несохранённые данные будут потеряны.`,
@@ -545,12 +432,7 @@ export default function KnittingTab({
       cancelText: "Отмена",
       onConfirm: async () => {
         try {
-          // Вызываем Rust команду для сброса
-          const resetData = await invoke("reset_knitting_progress");
-
-          console.log("🔄 Прогресс сбролен:", resetData);
-
-          // Обновляем локальное состояние
+          await invoke("reset_knitting_progress");
           setHttpServer((prev) => ({
             ...prev,
             currentRow: 0,
@@ -559,24 +441,24 @@ export default function KnittingTab({
             progressPercent: 0,
             chunksSent: 0,
           }));
-
-          // Очищаем сохранённый прогресс
+          // После reset_knitting_progress добавь:
+          await invoke("clear_solenoid_hits").catch(() => {});
+          setSolenoidHits([]);
+          setHitStats({
+            total: 0,
+            correct: 0,
+            misses: 0,
+            false_positives: 0,
+            accuracy_pct: 100,
+          });
           const key = getProgressKey();
           localStorage.removeItem(key);
           setSavedProgress(null);
-
-          // Отправляем сигнал перезагрузки ESP через сервер
           try {
             await invoke("send_esp_restart_signal");
-            console.log("🔄 ESP restart signal sent after progress reset");
           } catch (e) {
-            console.log(
-              "ESP restart signal not sent (server may not be running):",
-              e,
-            );
+            console.log("ESP restart signal not sent:", e);
           }
-
-          // Перерисовываем превью
           if (patternData) {
             drawPatternPreview(
               patternData.rows,
@@ -586,7 +468,6 @@ export default function KnittingTab({
               "right",
             );
           }
-
           addToast("Прогресс сброшен! Начинаем сначала.", "warning", 5000);
         } catch (error) {
           console.error("Ошибка сброса прогресса:", error);
@@ -595,9 +476,7 @@ export default function KnittingTab({
       },
     });
   }, [
-    httpServer.running,
-    httpServer.currentRow,
-    httpServer.totalRows,
+    httpServer,
     patternData,
     drawPatternPreview,
     getProgressKey,
@@ -606,14 +485,12 @@ export default function KnittingTab({
     showConfirm,
   ]);
 
-  // Загрузка темы
   useEffect(() => {
     invoke("get_theme")
       .then(setTheme)
       .catch(() => {});
   }, []);
 
-  // Загрузка проекта и узоров
   useEffect(() => {
     const loadProjectAndPatterns = async () => {
       try {
@@ -621,8 +498,6 @@ export default function KnittingTab({
           projectId: parseInt(projectId),
         });
         setProjectPath(projectData.file_path);
-
-        // Загружаем узоры из папки patterns
         const patternsDir = `${projectData.file_path}/patterns`;
         try {
           const entries = await invoke("read_dir", { path: patternsDir });
@@ -631,61 +506,55 @@ export default function KnittingTab({
               !entry.is_dir &&
               (entry.name.endsWith(".swaga") || entry.name.endsWith(".txt")),
           );
-
           const loadedPatterns = await Promise.all(
             patternFiles.map(async (file) => {
               const filePath = `${patternsDir}/${file.name}`;
               const content = await invoke("read_file_text", {
                 path: filePath,
               });
-              const parsed = parsePatternFile(content, file.name, filePath);
-              return parsed;
+              return parsePatternFile(content, file.name, filePath);
             }),
           );
-
           setPatterns(loadedPatterns.filter((p) => p !== null));
         } catch (error) {
-          console.log("Patterns directory does not exist yet");
           setPatterns([]);
         }
       } catch (error) {
         console.error("Failed to load project:", error);
       }
     };
-
-    if (projectId) {
-      loadProjectAndPatterns();
-    }
+    if (projectId) loadProjectAndPatterns();
   }, [projectId]);
 
-  // Обработка выбранного узора из PatternsTab
   useEffect(() => {
     if (
       selectedPatternFromPatterns &&
       selectedPatternFromPatterns.pattern_data
     ) {
       const pattern = selectedPatternFromPatterns;
-      const rows = pattern.pattern_data;
-      const width = pattern.width;
-      const height = pattern.height;
-
-      setPatternData({ rows, width, height, format: "from_patterns" });
-
-      // Принудительно перерисовываем превью после установки данных
+      setPatternData({
+        rows: pattern.pattern_data,
+        width: pattern.width,
+        height: pattern.height,
+        format: "from_patterns",
+      });
       setTimeout(() => {
-        drawPatternPreview(rows, width, height, 0, "right");
+        drawPatternPreview(
+          pattern.pattern_data,
+          pattern.width,
+          pattern.height,
+          0,
+          "right",
+        );
       }, 50);
     }
   }, [selectedPatternFromPatterns, drawPatternPreview]);
 
-  // Парсинг файла узора
   const parsePatternFile = (content, fileName, filePath) => {
     const lines = content.split("\n").filter((line) => line.trim() !== "");
-
     let metadata = {};
     let patternLines = [];
     let inHeader = true;
-
     for (const line of lines) {
       if (line.startsWith("#")) {
         if (inHeader) {
@@ -696,28 +565,22 @@ export default function KnittingTab({
               .map((s) => s.trim());
             metadata[key] = value;
           }
-          if (line.includes("# end_header")) {
-            inHeader = false;
-          }
+          if (line.includes("# end_header")) inHeader = false;
         }
       } else if (!inHeader) {
         patternLines.push(line.trim());
       }
     }
-
     if (patternLines.length === 0 && lines.length > 0) {
       patternLines = lines
         .filter((line) => !line.startsWith("#"))
         .map((line) => line.trim());
     }
-
     const height = patternLines.length;
     const width = patternLines.length > 0 ? patternLines[0].length : 0;
-
     const rows = patternLines.map((line) =>
       line.split("").map((char) => char === "1" || char === "#"),
     );
-
     return {
       id: fileName,
       name: fileName.replace(/\.(swaga|txt)$/, ""),
@@ -729,66 +592,55 @@ export default function KnittingTab({
     };
   };
 
-  // Выбор узора из галереи
   const handleSelectPatternFromGallery = (pattern) => {
-    const rows = pattern.pattern_data;
-    const width = pattern.width;
-    const height = pattern.height;
-
-    setPatternData({ rows, width, height, format: "from_gallery" });
+    setPatternData({
+      rows: pattern.pattern_data,
+      width: pattern.width,
+      height: pattern.height,
+      format: "from_gallery",
+    });
     setShowPatternGallery(false);
-
-    // Принудительно перерисовываем превью после установки данных
     setTimeout(() => {
-      drawPatternPreview(rows, width, height, 0, "right");
+      drawPatternPreview(
+        pattern.pattern_data,
+        pattern.width,
+        pattern.height,
+        0,
+        "right",
+      );
     }, 50);
-
-    if (onSelectPatternFromGallery) {
-      onSelectPatternFromGallery(pattern);
-    }
+    if (onSelectPatternFromGallery) onSelectPatternFromGallery(pattern);
   };
 
-  // Выбор файла через диалог
   const handleSelectImage = async () => {
     try {
       const selected = await open({
         title: "Выберите изображение для узора",
         multiple: false,
         filters: [
-          {
-            name: "Images",
-            extensions: ["png", "jpg", "jpeg", "bmp", "gif"],
-          },
+          { name: "Images", extensions: ["png", "jpg", "jpeg", "bmp", "gif"] },
         ],
       });
-
       if (selected) {
         setSelectedImage(selected);
         setError(null);
       }
     } catch (err) {
-      console.error("Failed to open file dialog:", err);
       setError(err.message || "Не удалось выбрать изображение");
     }
   };
 
-  // Конвертация изображения в паттерн (0 и 1)
   const handleConvertAndLoad = async () => {
     if (!selectedImage) return;
-
     try {
       setConverting(true);
       setError(null);
-
-      // Получаем путь к папке проекта
       const projectData = await invoke("open_project_by_id", {
         projectId: parseInt(projectId),
       });
-
       const projectFolderPath = projectData.file_path;
       const patternFileName = `pattern_${Date.now()}.swaga`;
       const outputPath = `${projectFolderPath}/patterns/${patternFileName}`;
-
       const result = await invoke("convert_image_to_pattern", {
         req: {
           image_path: selectedImage,
@@ -800,48 +652,37 @@ export default function KnittingTab({
           pattern_char_light: "0",
         },
       });
-
-      if (!result.success) {
+      if (!result.success)
         throw new Error(result.error || "Конвертация не удалась");
-      }
-
-      // Парсим результат
       const rows = result.preview_lines.map((line) =>
         line.split("").map((char) => char === "1"),
       );
-
-      const width = result.width;
-      const height = result.height;
-
-      const parsed = { rows, width, height, format: "converted" };
+      const parsed = {
+        rows,
+        width: result.width,
+        height: result.height,
+        format: "converted",
+      };
       setPatternData(parsed);
-
-      // Рисуем превью
-      drawPatternPreview(rows, width, height, 0, "right");
+      drawPatternPreview(rows, result.width, result.height, 0, "right");
     } catch (err) {
-      console.error("Conversion failed:", err);
       setError(err.message || "Не удалось конвертировать изображение");
     } finally {
       setConverting(false);
     }
   };
 
-  // Добавь новые состояния в начало компонента KnittingTab:
-  const [kslWidth, setKslWidth] = useState(null); // Ширина KSL (датчиков)
-  const [useManualKsl, setUseManualKsl] = useState(false); // Ручной ввод KSL
-  const [manualKslWidth, setManualKslWidth] = useState(48); // Ручное значение KSL
-  const [patternWithPadding, setPatternWithPadding] = useState(null); // Узор с нулями по краям
+  // === ИЗМЕНЕНИЯ: KSL только ручной ввод, ширина узора из Rust ===
+  const [kslWidth, setKslWidth] = useState(0); // Ширина полотна (ручной ввод)
+  const [patternWithPadding, setPatternWithPadding] = useState(null);
 
   // Функция для добавления нулей по краям узора
   const padPatternWithZeros = useCallback((rows, targetWidth) => {
     if (!rows || rows.length === 0) return null;
-
     const currentWidth = rows[0].length;
-    if (currentWidth >= targetWidth) return rows; // Узор уже шире или равен
-
+    if (currentWidth >= targetWidth) return rows;
     const paddingEachSide = Math.floor((targetWidth - currentWidth) / 2);
-    const remainder = (targetWidth - currentWidth) % 2; // Если нечетное количество
-
+    const remainder = (targetWidth - currentWidth) % 2;
     return rows.map((row) => {
       const leftPadding = Array(paddingEachSide).fill(false);
       const rightPadding = Array(paddingEachSide + remainder).fill(false);
@@ -849,84 +690,76 @@ export default function KnittingTab({
     });
   }, []);
 
-  // Функция для расчета ширины KSL из blueprint
-  const { widestWidth } = useBlueprint();
-
-  useEffect(() => {
-    if (!useManualKsl && widestWidth > 0) {
-      setKslWidth(widestWidth);
-    }
-  }, [widestWidth, useManualKsl]);
-  // Эффект для применения padding к узору
-  useEffect(() => {
-    if (!patternData || !kslWidth) {
-      setPatternWithPadding(patternData);
+  // === ИЗМЕНЕНИЯ: startHttpServer — берём ширину из Rust, всегда стопаем старый сервер ===
+  const startHttpServer = async () => {
+    if (!patternData) {
+      addToast("Сначала выберите узор!", "error", 4000);
       return;
     }
 
-    const padded = padPatternWithZeros(patternData.rows, kslWidth);
-    if (padded) {
-      setPatternWithPadding({
-        rows: padded,
-        width: kslWidth,
-        height: patternData.height,
-        format: patternData.format,
-      });
-    } else {
-      setPatternWithPadding(patternData);
-    }
-  }, [patternData, kslWidth, padPatternWithZeros]);
+    // 1. Загружаем stamps из Rust чтобы получить ширину детали
+    let patternTargetWidth = patternData.width;
+    let stampInfo = null;
 
-  const startHttpServer = async () => {
-    if (!patternWithPadding) return;
-
-    // Проверяем наличие узоров на выкройке и показываем подсказку про датчики
     try {
       const stamps = await invoke("get_blueprint_pattern_stamps", {
-        projectId,
-      }).catch(() => []);
+        projectId: parseInt(projectId),
+      });
       if (stamps && stamps.length > 0) {
-        // Находим самую широкую ЧАСТЬ ВЫКРОЙКИ (не узора!)
+        // Находим самый широкий штамп
         const widestStamp = stamps.reduce(
           (max, s) => (s.width > max.width ? s : max),
           stamps[0],
         );
-        const patternName =
-          stamps.find((s) => s.id === widestStamp.pattern_id)?.name ||
-          "#" + widestStamp.pattern_id;
-
-        addToast(
-          `📐 Датчики: выставьте на ширину детали — ${widestStamp.width} п. (${patternName}). Узор расширен до ${kslWidth} п.`,
-          "info",
-          8000,
-        );
-      } else if (useManualKsl) {
-        // Ручной режим
-        addToast(
-          `📐 Датчики: выставьте на ${kslWidth} петель (ручной режим)`,
-          "info",
-          5000,
-        );
+        patternTargetWidth = widestStamp.width;
+        stampInfo = {
+          width: widestStamp.width,
+          name:
+            stamps.find((s) => s.id === widestStamp.pattern_id)?.name ||
+            "#" + widestStamp.pattern_id,
+        };
       }
     } catch (e) {
-      console.log("Blueprint stamps not available");
+      console.log("Blueprint stamps not available, using pattern width");
     }
 
-    // Показываем модалку с подтверждением
+    // 2. Применяем padding к паттерну (до ширины из stamps)
+    const paddedRows = padPatternWithZeros(
+      patternData.rows,
+      patternTargetWidth,
+    );
+    const finalPattern = paddedRows
+      ? {
+          rows: paddedRows,
+          width: patternTargetWidth,
+          height: patternData.height,
+        }
+      : patternData;
+
+    // 3. Показываем подсказку
+    if (stampInfo) {
+      addToast(
+        `📐 Ширина детали: ${stampInfo.width} п. (${stampInfo.name}). Узор расширен. Датчики: ${kslWidth} п.`,
+        "info",
+        8000,
+      );
+    } else {
+      addToast(`📐 Датчики: выставьте на ${kslWidth<=0?patternData.width:kslWidth} петель`, "info", 5000);
+    }
+
+    // 4. Подтверждение запуска
     const confirmStart = window.confirm(
       "🧶 Начать вязание?\n\n" +
         "Убедитесь, что:\n" +
         "• ESP32 включен и подключён к WiFi\n" +
         `• IP адрес ESP32 настроен на: ${computerIp}\n` +
-        `• Датчики (KSL) выставлены на ${kslWidth || patternWithPadding.width} игл\n` +
+        `• Датчики (KSL) выставлены на ${kslWidth<=0?patternData.width:kslWidth} игл\n` +
         "• Нить заправлена в машину\n\n" +
         "Нажмите OK для запуска или Отмена для отмены.",
     );
-
     if (!confirmStart) return;
 
     try {
-      // Сбрасываем прогресс перед новым запуском
       setHttpServer((prev) => ({
         ...prev,
         currentRow: 0,
@@ -935,33 +768,18 @@ export default function KnittingTab({
         connected: false,
       }));
 
+      // 5. ВСЕГДА останавливаем старый сервер перед запуском нового
+      await invoke("stop_esp32_http_server").catch(() => {});
+      // Даём время на освобождение порта
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // 6. Запускаем новый сервер с расширенным паттерном
       const result = await invoke("start_esp32_http_server", {
-        patternRows: patternWithPadding.rows, // Используем узор с padding!
-        patternWidth: patternWithPadding.width,
-        patternHeight: patternWithPadding.height,
+        patternRows: finalPattern.rows,
+        patternWidth: finalPattern.width,
+        patternHeight: finalPattern.height,
         chunkSize: 4,
         port: 6666,
-      }).catch(async (err) => {
-        // Если сервер не запустился из-за занятого порта, пробуем перезапустить
-        if (err.message && err.message.includes("Address already in use")) {
-          console.log("🔄 Порт занят, пробуем перезапустить сервер...");
-
-          // Останавливаем старый сервер
-          await invoke("stop_esp32_http_server").catch(() => {});
-
-          // Ждём немного
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-
-          // Пробуем снова
-          return await invoke("start_esp32_http_server", {
-            patternRows: patternWithPadding.rows,
-            patternWidth: patternWithPadding.width,
-            patternHeight: patternWithPadding.height,
-            chunkSize: 4,
-            port: 6666,
-          });
-        }
-        throw err;
       });
 
       console.log("HTTP server started:", result);
@@ -970,10 +788,9 @@ export default function KnittingTab({
         ...prev,
         running: true,
         serverIp: computerIp,
-        totalRows: patternWithPadding.height,
+        totalRows: finalPattern.height,
       }));
 
-      // Запускаем опрос статуса
       startStatusPolling();
     } catch (err) {
       console.error("Failed to start HTTP server:", err);
@@ -982,66 +799,52 @@ export default function KnittingTab({
     }
   };
 
-  
-
-  // Остановка сервера
   const stopHttpServer = async () => {
     try {
       await invoke("stop_esp32_http_server");
       setHttpServer((prev) => ({ ...prev, running: false }));
       stopStatusPolling();
-      // Сбрасываем флаг чтобы при следующем запуске уведомление снова показалось
+      stopSolenoidPolling(); 
       hasShownCompletionNotification.current = false;
     } catch (err) {
       console.error("Failed to stop server:", err);
     }
   };
 
-  // Опрос статуса сервера
   const startStatusPolling = () => {
-    // Сбрасываем флаги при новом запуске
     hasShownCompletionNotification.current = false;
     hasPlayedConnectSound.current = false;
-
-    // Track pattern width for change detection
     let lastPatternWidth = patternData?.width || 0;
     let lastStampPatternId = null;
-
     stopStatusPolling();
 
     statusIntervalRef.current = setInterval(async () => {
       try {
-        // Получаем информацию о текущем ряде
         const rowInfo = await invoke("get_current_row_info");
-
         const current = rowInfo.row || 0;
         const direction = rowInfo.direction || "right";
         const total = rowInfo.total || 0;
         const isEspConnected = rowInfo.is_esp_connected || false;
         const maxSentRow = rowInfo.max_sent_row || 0;
 
-        // Check for blueprint pattern stamp width changes
         try {
           const stamps = await invoke("get_blueprint_pattern_stamps", {
-            projectId,
+            projectId: parseInt(projectId),
           }).catch(() => []);
           if (stamps && stamps.length > 0) {
-            // Find which stamp (if any) covers the current row
-            // Convert knitting row to SVG y coordinate
             const svgY = total - current;
             let currentStamp = null;
             for (const stamp of stamps) {
-              const posY = stamp.position_y;
-              const h = stamp.height;
-              if (svgY >= posY && svgY < posY + h) {
+              if (
+                svgY >= stamp.position_y &&
+                svgY < stamp.position_y + stamp.height
+              ) {
                 currentStamp = stamp;
                 break;
               }
             }
-
             if (currentStamp) {
               if (lastStampPatternId !== currentStamp.pattern_id) {
-                // New pattern started
                 lastStampPatternId = currentStamp.pattern_id;
                 if (
                   lastPatternWidth !== 0 &&
@@ -1056,26 +859,19 @@ export default function KnittingTab({
                 lastPatternWidth = currentStamp.width;
               }
             } else if (lastStampPatternId !== null) {
-              // Exited pattern area
               lastStampPatternId = null;
               lastPatternWidth = patternData?.width || 0;
             }
           }
-        } catch (e) {
-          // Blueprint not available, ignore
-        }
+        } catch (e) {}
 
         if (total > 0) {
           const progress = Math.round((current / total) * 100);
           const chunksSent = Math.ceil(maxSentRow / 4);
-
-          // Проверяем, подключился ли ESP32 (используем флаг с сервера)
           const connected = isEspConnected;
 
-          // Если ESP только что подключился - показываем уведомление и играем звук
           if (isEspConnected && !hasPlayedConnectSound.current) {
             hasPlayedConnectSound.current = true;
-            console.log("🔌 ESP32 подключён!");
             addToast("🔌 ESP32 подключён!", "success", 3000);
             playSound(connectSoundRef);
           }
@@ -1093,7 +889,6 @@ export default function KnittingTab({
             maxSentRow,
           }));
 
-          // Обновляем canvas с новой позицией
           if (patternData) {
             drawPatternPreview(
               patternData.rows,
@@ -1104,29 +899,22 @@ export default function KnittingTab({
             );
           }
 
-          // Проверяем завершение вязания (ряд >= total)
           if (
             current >= total &&
             total > 0 &&
             !hasShownCompletionNotification.current
           ) {
             hasShownCompletionNotification.current = true;
-            console.log("✅ Вязание завершено!");
-
-            // Показываем toast-уведомление
             addToast(
               `Вязание завершено! Все ${total} рядов связаны!`,
               "success",
               8000,
             );
-
-            // Играем звук завершения
             playSound(completeSoundRef);
           }
         }
       } catch (err) {
         console.error("Status poll failed:", err);
-        // Не останавливаем сервер при ошибке polling - продолжаем попытки
       }
     }, 1000);
   };
@@ -1138,7 +926,6 @@ export default function KnittingTab({
     }
   };
 
-  // Очистка при размонтировании
   useEffect(() => {
     return () => {
       stopStatusPolling();
@@ -1146,7 +933,6 @@ export default function KnittingTab({
     };
   }, []);
 
-  // Перерисовка при изменении currentRow и direction
   useEffect(() => {
     if (patternData && canvasRef.current) {
       drawPatternPreview(
@@ -1164,29 +950,10 @@ export default function KnittingTab({
     drawPatternPreview,
   ]);
 
-  // Перерисовка при появлении patternData (когда узор выбран)
   useEffect(() => {
-    console.log(
-      "🎨 patternData useEffect:",
-      patternData ? `${patternData.width}x${patternData.height}` : "null",
-    );
-    console.log("🖼️ canvasRef.current:", canvasRef.current);
-
-    if (!patternData) {
-      console.log("⚠️ patternData is null, skipping");
-      return;
-    }
-
-    // Небольшая задержка чтобы DOM успел обновиться
+    if (!patternData) return;
     const timer = setTimeout(() => {
-      console.log("🎨 setTimeout callback, canvasRef:", canvasRef.current);
-
-      if (!canvasRef.current) {
-        console.warn("⚠️ canvasRef.current is still null after timeout!");
-        return;
-      }
-
-      console.log("🎨 Drawing preview...");
+      if (!canvasRef.current) return;
       drawPatternPreview(
         patternData.rows,
         patternData.width,
@@ -1195,11 +962,9 @@ export default function KnittingTab({
         httpServer.currentDirection,
       );
     }, 200);
-
     return () => clearTimeout(timer);
   }, [patternData]);
 
-  // Перерисовка при изменении цветов паттерна
   useEffect(() => {
     if (patternData && canvasRef.current) {
       drawPatternPreview(
@@ -1218,53 +983,146 @@ export default function KnittingTab({
     httpServer.currentDirection,
   ]);
 
-  // Создание мини-превью для галереи
   const createMiniPreview = useCallback(
     (rows, width, height, size = 60) => {
       if (!rows || rows.length === 0) return "";
-
       const miniCanvas = document.createElement("canvas");
       const cellSize = Math.max(1, Math.floor(size / Math.max(width, height)));
       miniCanvas.width = Math.max(1, width * cellSize);
       miniCanvas.height = Math.max(1, height * cellSize);
-
       const ctx = miniCanvas.getContext("2d");
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, miniCanvas.width, miniCanvas.height);
-
-      // 🔁 Вертикальный флип: рисуем строки в обратном порядке
       for (let y = 0; y < rows.length; y++) {
-        // Инвертируем индекс: 0 → последняя строка, height-1 → первая
         const visualY = height - 1 - y;
         const row = rows[visualY];
-
         for (let x = 0; x < row.length; x++) {
-          if (
-            row[x] === true ||
-            row[x] === 1 ||
-            row[x] === "1" ||
-            row[x] === "#"
-          ) {
-            ctx.fillStyle = patternColors.dark;
-          } else {
-            ctx.fillStyle = patternColors.light;
-          }
-          // y рисуем как есть — canvas рисует сверху вниз, а мы уже инвертировали источник
+          ctx.fillStyle =
+            row[x] === true || row[x] === 1 || row[x] === "1" || row[x] === "#"
+              ? patternColors.dark
+              : patternColors.light;
           ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
         }
       }
-
       return miniCanvas.toDataURL("image/png");
     },
     [patternColors],
   );
 
+  // Рисуем клеточную доску с фактическими срабатываниями
+  const drawTestGrid = useCallback((hits, width, height) => {
+    const canvas = testCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const maxCanvasSize = 500;
+    const cellSize = Math.max(
+      2,
+      Math.floor(maxCanvasSize / Math.max(width, height)),
+    );
+
+    canvas.width = Math.min(width * cellSize, maxCanvasSize);
+    canvas.height = Math.min(height * cellSize, maxCanvasSize);
+
+    const visibleWidth = Math.floor(canvas.width / cellSize);
+    const visibleHeight = Math.floor(canvas.height / cellSize);
+    const startX = Math.max(0, Math.floor((width - visibleWidth) / 2));
+    const startY = Math.max(0, Math.floor((height - visibleHeight) / 2));
+
+    // Фон
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Индекс хитов для быстрого доступа: key "row:needle" → hit
+    const hitMap = new Map();
+    for (const h of hits) {
+      hitMap.set(`${h.row}:${h.needle}`, h);
+    }
+
+    // Рисуем клетки (вертикальный флип, как в основном preview)
+    for (let y = 0; y < visibleHeight && startY + y < height; y++) {
+      const visualY = height - 1 - (startY + y);
+      for (let x = 0; x < visibleWidth && startX + x < width; x++) {
+        const pixelIndex = startX + x;
+        const hit = hitMap.get(`${visualY}:${pixelIndex}`);
+
+        if (!hit) {
+          // Ещё не провязано — серая клетка
+          ctx.fillStyle = "#2a2a2a";
+        } else if (hit.miss) {
+          // Пропуск — БЕЛЫЙ (должен был, но нет)
+          ctx.fillStyle = "#ffffff";
+        } else if (hit.false_pos) {
+          // Ложное срабатывание — КРАСНЫЙ
+          ctx.fillStyle = "#ef4444";
+        } else {
+          // Верное — ЗЕЛЁНЫЙ
+          ctx.fillStyle = "#22c55e";
+        }
+
+        ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
+      }
+    }
+  }, []);
+
+  // Опрашиваем сервер о хитах
+  const startSolenoidPolling = useCallback(() => {
+    if (solenoidIntervalRef.current) return;
+
+    solenoidIntervalRef.current = setInterval(async () => {
+      try {
+        // Читаем напрямую из Rust — никакого HTTP!
+        const data = await invoke("get_solenoid_hits_data");
+        console.log(data);
+        setSolenoidHits(data.hits || []);
+        setHitStats(
+          data.stats || {
+            total: 0,
+            correct: 0,
+            misses: 0,
+            false_positives: 0,
+            accuracy_pct: 100,
+          },
+        );
+
+        // Перерисовываем canvas
+        if (patternData && data.hits && data.hits.length > 0) {
+          drawTestGrid(data.hits, patternData.width, patternData.height);
+        }
+      } catch (e) {
+        console.log("Solenoid hits poll error:", e);
+      }
+    }, 1500);
+  }, [patternData, drawTestGrid]);
+
+  const stopSolenoidPolling = () => {
+    if (solenoidIntervalRef.current) {
+      clearInterval(solenoidIntervalRef.current);
+      solenoidIntervalRef.current = null;
+    }
+  };
+
+  // Запуск/остановка теста при открытии панели
+  useEffect(() => {
+    if (showTestPanel && httpServer.running) {
+      startSolenoidPolling();
+    } else {
+      stopSolenoidPolling();
+    }
+    return () => stopSolenoidPolling();
+  }, [showTestPanel, httpServer.running, startSolenoidPolling]);
+
+  // Остановка вместе с сервером
+  useEffect(() => {
+    if (!httpServer.running) {
+      stopSolenoidPolling();
+    }
+  }, [httpServer.running]);
+
   return (
     <div className="knitting-tab">
-      {/* Выбор узора из галереи */}
       <div className="pattern-gallery-selection">
         <h4>🧶 Выберите узор для вязания</h4>
-
         {!showPatternGallery ? (
           <button
             className="btn-open-gallery"
@@ -1325,7 +1183,6 @@ export default function KnittingTab({
             </div>
           </div>
         )}
-
         {patternData && !showPatternGallery && (
           <div className="selected-pattern-info">
             <span className="selected-pattern-name">
@@ -1343,7 +1200,6 @@ export default function KnittingTab({
         )}
       </div>
 
-      {/* Toolbar */}
       <div className="knitting-toolbar">
         <button
           className="btn-color-palette"
@@ -1354,42 +1210,23 @@ export default function KnittingTab({
           🎨 Цвета
         </button>
 
-  {!httpServer.running && patternData && (
-    <div className="ksl-settings-inline">
-      <label className="ksl-checkbox">
-        <input
-          type="checkbox"
-          checked={useManualKsl}
-          onChange={(e) => setUseManualKsl(e.target.checked)}
-        />
-        <span>Ширина полотна (по выкройке или вручную?):</span>
-      </label>
-      
-      {useManualKsl ? (
-        <input
-          type="number"
-          className="ksl-input"
-          min="1"
-          max="200"
-          value={manualKslWidth}
-          onChange={(e) => setManualKslWidth(Number(e.target.value))}
-          title="Ширина датчиков (петель)"
-        />
-      ) : (
-        <span className="ksl-value" title="Автоматически из выкройки">
-          {kslWidth || "—"} п.
-        </span>
-      )}
-      
-      {patternData.width < kslWidth && (
-        <span className="ksl-padding-indicator" title="Узор расширен нулями">
-          (+{kslWidth - patternData.width})
-        </span>
-      )}
-    </div>
-  )}
+        {/* === ИЗМЕНЕНИЯ: Только ручной ввод ширины полотна, без чекбокса === */}
+        {!httpServer.running && patternData && (
+          <div className="ksl-settings-inline">
+            <label className="ksl-label">Ширина полотна (игл):</label>
+            <input
+              type="number"
+              className="ksl-input"
+              min="1"
+              max="200"
+              value={patternData.width}
+              onChange={(e) => setKslWidth(Number(e.target.value))}
+              title="Ширина датчиков (петель) — ручной ввод"
+            />
+            <span className="ksl-hint">п.</span>
+          </div>
+        )}
 
-        {/* Кнопки сохранения/восстановления прогресса */}
         {httpServer.running && (
           <>
             <button
@@ -1400,7 +1237,6 @@ export default function KnittingTab({
             >
               💾 Сохранить прогресс
             </button>
-
             <button
               className="btn-reset-progress"
               onClick={resetProgress}
@@ -1413,27 +1249,35 @@ export default function KnittingTab({
         )}
 
         {savedProgress && !httpServer.running && (
+          <>
+            <button
+              className="btn-restore-progress"
+              onClick={restoreProgress}
+              type="button"
+              title={`Восстановить прогресс: ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`}
+            >
+              🔄 Восстановить прогресс
+            </button>
+            <button
+              className="btn-delete-progress"
+              onClick={deleteSavedProgress}
+              type="button"
+              title="Удалить сохранённый прогресс"
+            >
+              🗑️
+            </button>
+          </>
+        )}
+        {httpServer.running && (
           <button
-            className="btn-restore-progress"
-            onClick={restoreProgress}
+            className="btn-test-toggle"
+            onClick={() => setShowTestPanel(!showTestPanel)}
             type="button"
-            title={`Восстановить прогресс: ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`}
+            title="Показать/скрыть тест на соответствие DOB"
           >
-            🔄 Восстановить прогресс
+            🧪 Тест {showTestPanel ? "▼" : "▶"}
           </button>
         )}
-
-        {savedProgress && !httpServer.running && (
-          <button
-            className="btn-delete-progress"
-            onClick={deleteSavedProgress}
-            type="button"
-            title="Удалить сохранённый прогресс"
-          >
-            🗑️
-          </button>
-        )}
-
         {httpServer.running ? (
           <button className="btn-stop" onClick={stopHttpServer}>
             ⏹️ Завершить
@@ -1461,7 +1305,6 @@ export default function KnittingTab({
         )}
       </div>
 
-      {/* Информация о сохранённом прогрессе */}
       {savedProgress && !httpServer.running && (
         <div className="saved-progress-info">
           <div className="progress-info-header">
@@ -1493,7 +1336,6 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Палитра цветов */}
       {showColorPicker && patternData && (
         <div className="color-picker-panel">
           <h5>🎨 Настройка цветов узора</h5>
@@ -1598,15 +1440,14 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Подготовка к вязанию - подсказка */}
       {patternData && !httpServer.running && (
         <div className="ready-to-knit-info">
           <div className="info-icon">🧶</div>
           <h4>Готово к вязанию!</h4>
           <p>
             <strong>Узор загружен:</strong> {patternData.width}×
-            {patternData.height}({Math.ceil(patternData.height / 4)} чанков по 4
-            ряда)
+            {patternData.height} ({Math.ceil(patternData.height / 4)} чанков по
+            4 ряда)
           </p>
           <div className="steps">
             <div className="step">
@@ -1630,7 +1471,6 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Info Panel */}
       {patternData && (
         <div className="pattern-info-panel">
           <h4>📋 Информация об узоре</h4>
@@ -1648,11 +1488,9 @@ export default function KnittingTab({
               🧶 Чанков: <strong>{Math.ceil(patternData.height / 4)}</strong>{" "}
               (по 4 ряда)
             </span>
-            {kslWidth && (
-        <span>
-          По ширине изделия: <strong>{kslWidth} игл</strong>
-          {useManualKsl && <span className="hint-text"> (вручную)</span>}
-        </span> )}
+            <span>
+              📏 Ширина полотна: <strong>{kslWidth} игл</strong> (ручной ввод)
+            </span>
             <span>
               🔗 ESP32 IP:{" "}
               <strong>{httpServer.serverIp || computerIp}:6666</strong>
@@ -1661,7 +1499,6 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Server Status */}
       {httpServer.running && (
         <div className="server-status-panel">
           <div className="status-header">
@@ -1674,8 +1511,6 @@ export default function KnittingTab({
                 : "🔌 Ожидание подключения"}
             </span>
           </div>
-
-          {/* Progress Bar */}
           <div className="progress-section">
             <div className="progress-label">
               <span>Прогресс вязания</span>
@@ -1691,8 +1526,6 @@ export default function KnittingTab({
               />
             </div>
           </div>
-
-          {/* Chunk Progress */}
           <div className="chunk-progress">
             <h5>📦 Отправленные чанки:</h5>
             <div className="chunk-grid">
@@ -1705,7 +1538,6 @@ export default function KnittingTab({
                   const isCurrent =
                     chunkStart >= httpServer.currentRow &&
                     chunkStart < httpServer.currentRow + 4;
-
                   return (
                     <div
                       key={i}
@@ -1724,8 +1556,6 @@ export default function KnittingTab({
               )}
             </div>
           </div>
-
-          {/* Connection Info */}
           <div className="connection-info">
             <p>
               <strong>Настройте ESP32:</strong>
@@ -1740,8 +1570,89 @@ export default function KnittingTab({
           </div>
         </div>
       )}
+      {/* === ПАНЕЛЬ ТЕСТА НА СООТВЕТСТВИЕ === */}
+      {showTestPanel && patternData && (
+        <div className="solenoid-test-panel">
+          <div className="test-header">
+            <h4>🧪 Тест на соответствие DOB</h4>
+            <button
+              className="btn-close-test"
+              onClick={() => setShowTestPanel(false)}
+            >
+              ✕
+            </button>
+          </div>
 
-      {/* Pattern Preview */}
+          {/* Статистика */}
+          <div className="test-stats">
+            <div className="stat-item stat-correct">
+              <span className="stat-dot green"></span>
+              <span>
+                Верно: <strong>{hitStats.correct}</strong>
+              </span>
+            </div>
+            <div className="stat-item stat-miss">
+              <span className="stat-dot white"></span>
+              <span>
+                Пропуски: <strong>{hitStats.misses}</strong>
+              </span>
+            </div>
+            <div className="stat-item stat-false">
+              <span className="stat-dot red"></span>
+              <span>
+                Лишние: <strong>{hitStats.false_positives}</strong>
+              </span>
+            </div>
+            <div className="stat-item stat-total">
+              <span>
+                Всего: <strong>{hitStats.total}</strong>
+              </span>
+            </div>
+            <div className="stat-item stat-accuracy">
+              <span>
+                Точность: <strong>{hitStats.accuracy_pct}%</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Легенда */}
+          <div className="test-legend">
+            <span>
+              <span className="legend-box green"></span> Верное срабатывание
+            </span>
+            <span>
+              <span className="legend-box red"></span> Лишнее (сработал зря)
+            </span>
+            <span>
+              <span className="legend-box white"></span> Пропуск (должен был)
+            </span>
+            <span>
+              <span className="legend-box gray"></span> Не провязано
+            </span>
+          </div>
+
+          {/* Canvas */}
+          <div className="test-canvas-wrapper">
+            <canvas ref={testCanvasRef} className="test-canvas" />
+          </div>
+
+          {hitStats.total === 0 && (
+            <p className="test-hint">Ожидание данных от ESP32... Вяжите!</p>
+          )}
+
+          {hitStats.accuracy_pct < 90 && hitStats.total > 50 && (
+            <div className="test-warning">
+              ⚠️ Точность ниже 90%. Проверьте:
+              <ul>
+                <li>Дребезг контактов KSL/CCP</li>
+                <li>Полярность DOB (LOW/HIGH)</li>
+                <li>Скорость каретки</li>
+                <li>Синхронизацию ND1</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
       {patternData && (
         <div className="pattern-preview-section">
           <h4>🎨 Предпросмотр узора</h4>
@@ -1756,10 +1667,8 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Error Message */}
       {error && <div className="error-message">❌ {error}</div>}
 
-      {/* Empty State */}
       {!patternData && !converting && (
         <div className="empty-state">
           <div className="empty-icon">🧶</div>
@@ -1770,7 +1679,6 @@ export default function KnittingTab({
         </div>
       )}
 
-      {/* Toast уведомления */}
       <div className="toast-container">
         {toasts.map((toast) => (
           <div key={toast.id} className={`toast toast-${toast.type}`}>

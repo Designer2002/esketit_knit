@@ -14,6 +14,7 @@ use config::load_config;
 use commands::*;
 use database::*;
 use crate::algorhytms::convert_image_to_pattern;
+use crate::http_server::{get_solenoid_hits_data, clear_solenoid_hits};
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -108,6 +109,8 @@ pub fn run() {
             save_garment_progress,
             load_garment_progress,
             calculate_blueprint,
+            get_solenoid_hits_data,
+            clear_solenoid_hits,
         ])
         
         // Обработка закрытия окон

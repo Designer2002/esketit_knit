@@ -143,10 +143,14 @@ fn convert_image_to_pattern_sync(
     let (width, height) = grayscale.dimensions();
 
 
-    // Применяем зеркалирование если нужно
+    // Применяем зеркалирование по горизонтали и вертикали если нужно
     let processed: ImageBuffer<Luma<u8>, Vec<u8>> = if reverse {
+        println!("🔀 convert_image_to_pattern: applying reverse/mirror for image {}x{}", width, height);
         ImageBuffer::from_fn(width, height, |x, y| {
-            grayscale.get_pixel(height - 1 - x, height - 1 - y).clone()
+            // Correct indices: x ranges 0..width, y ranges 0..height
+            let sx = width - 1 - x;
+            let sy = height - 1 - y;
+            grayscale.get_pixel(sx, sy).clone()
         })
     } else {
         grayscale
