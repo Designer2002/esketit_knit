@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import "./Start.css";
 import "../CreateProject/CreateProject.css";
 import { Window } from "@tauri-apps/api/window";
-
+import { useT } from "../i18n"; // ✅ НОВОЕ
 
 const themes = {
   "dark-blue": {
@@ -67,6 +67,8 @@ const themes = {
     selectBg: "rgba(0, 84, 101, 0.9)",
   },
 };
+
+const { t, lang, setLang, languages } = useT();
 
 export default function App() {
   const [theme, setTheme] = useState("dark-blue");
@@ -272,6 +274,31 @@ const handleOpenProject = async (project) => {
       }}
       id="root"
     >
+      <select
+          aria-label="Язык"
+          value={lang}
+          onChange={(e) => setLang(e.target.value)}
+          style={{
+            borderRadius: "16px",
+            padding: "0.5rem 1rem",
+            fontSize: "1rem",
+            fontWeight: "600",
+            color: currentTheme.textColor,
+            backgroundColor: currentTheme.selectBg,
+            border: "none",
+            cursor: "pointer",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+            backdropFilter: "blur(10px)",
+            transition: "background-color 0.3s ease, color 0.3s ease",
+            userSelect: "none",
+          }}
+        >
+          {languages.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.flag} {l.name}
+            </option>
+          ))}
+        </select>
       {/* Theme Selector */}
       <div
         style={{
@@ -282,7 +309,7 @@ const handleOpenProject = async (project) => {
         }}
       >
         <select
-          aria-label="Select Theme"
+          aria-label="Тема"
           value={theme}
           onChange={(e) => setTheme(e.target.value)}
           style={{

@@ -846,11 +846,6 @@ export default function ImageConverter({
                   </strong>{" "}
                   пикселей
                 </span>
-                <span>
-                  🧶 Чанков:{" "}
-                  <strong>{Math.ceil(pixelatedPreview.height / 4)}</strong> (по
-                  4 ряда)
-                </span>
               </div>
             )}
           </div>

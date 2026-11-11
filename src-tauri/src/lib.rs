@@ -7,14 +7,13 @@ mod database;
 mod utilities;
 mod algorhytms;
 pub mod blueprint;
-
+use crate::http_server::clear_esp_restart_signal;
 use tauri::Manager;
 use state::{ThemeState, WindowState};
 use config::load_config;
 use commands::*;
 use database::*;
 use crate::algorhytms::convert_image_to_pattern;
-use crate::http_server::{get_solenoid_hits_data, clear_solenoid_hits};
 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -70,6 +69,7 @@ pub fn run() {
             get_esp32_http_server_status,
             get_computer_ip,
             send_esp_restart_signal,
+            clear_esp_restart_signal,
             get_current_row_info,
             restore_knitting_progress,
             reset_knitting_progress,
@@ -109,8 +109,6 @@ pub fn run() {
             save_garment_progress,
             load_garment_progress,
             calculate_blueprint,
-            get_solenoid_hits_data,
-            clear_solenoid_hits,
         ])
         
         // Обработка закрытия окон
