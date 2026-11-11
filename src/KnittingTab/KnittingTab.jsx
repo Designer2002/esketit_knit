@@ -18,19 +18,6 @@ export default function KnittingTab({
   const [projectPath, setProjectPath] = useState(null);
   const [patterns, setPatterns] = useState([]);
   const [showPatternGallery, setShowPatternGallery] = useState(false);
-  // === ТЕСТ НА СООТВЕТСТВИЕ DOB ===
-  const [solenoidHits, setSolenoidHits] = useState([]);
-  const [hitStats, setHitStats] = useState({
-    total: 0,
-    correct: 0,
-    misses: 0,
-    false_positives: 0,
-    accuracy_pct: 100,
-  });
-  const [showTestPanel, setShowTestPanel] = useState(false);
-  const testCanvasRef = useRef(null);
-  const solenoidIntervalRef = useRef(null);
-
   // Настройки цветов паттерна
   const [patternColors, setPatternColors] = useState(() => {
     const saved = localStorage.getItem("patternColors");
@@ -59,7 +46,6 @@ export default function KnittingTab({
     currentDirection: "right",
     totalRows: 0,
     progressPercent: 0,
-    chunksSent: 0,
     maxSentRow: 0,
   });
 
@@ -156,13 +142,6 @@ export default function KnittingTab({
     }
   }, []);
 
-  useEffect(() => {
-    if (patternData && httpServer.running) {
-      invoke("send_esp_restart_signal").catch((e) => {
-        console.log("ESP restart signal not sent:", e);
-      });
-    }
-  }, [patternData, httpServer.running]);
 
   const drawPatternPreview = useCallback(
     (rows, width, height, currentRow = 0, direction = "right") => {
@@ -261,29 +240,28 @@ export default function KnittingTab({
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId || !patternData) return;
-    const key = getProgressKey();
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        const progress = JSON.parse(saved);
-        if (
-          progress.patternWidth === patternData.width &&
-          progress.patternHeight === patternData.height
-        ) {
-          setSavedProgress(progress);
-        } else {
-          localStorage.removeItem(key);
-          setSavedProgress(null);
-        }
-      } catch (e) {
-        console.error("Ошибка загрузки прогресса:", e);
+  if (!projectId || !patternData) return;
+  const key = getProgressKey();
+  const saved = localStorage.getItem(key);
+  if (saved) {
+    try {
+      const progress = JSON.parse(saved);
+      if (
+        progress.patternWidth === patternData.width &&
+        progress.patternHeight === patternData.height
+      ) {
+        setSavedProgress(progress);
+      } else {
+        localStorage.removeItem(key);
+        setSavedProgress(null);
       }
-    } else {
-      setSavedProgress(null);
+    } catch (e) {
+      console.error("Ошибка загрузки прогресса:", e);
     }
-  }, [projectId, patternData?.width, patternData?.height, getProgressKey]);
-
+  } else {
+    setSavedProgress(null);
+  }
+}, [projectId, patternData, getProgressKey]); // ✅ Используем patternData целиком
   const saveProgress = useCallback(() => {
     if (!patternData || !httpServer.running) {
       showAlert("Сначала запустите вязание", "warning");
@@ -331,134 +309,121 @@ export default function KnittingTab({
     [showModal],
   );
 
-  const restoreProgress = useCallback(() => {
-    if (!savedProgress) {
-      showAlert("Нет сохранённого прогресса", "warning");
-      return;
+  const stopStatusPolling = () => {
+    if (statusIntervalRef.current) {
+      clearInterval(statusIntervalRef.current);
+      statusIntervalRef.current = null;
     }
-    showConfirm({
-      title: "🔄 Восстановить прогресс?",
-      message: `Продолжить вязание с ряда ${savedProgress.currentRow}/${savedProgress.totalRows}?\n\nНаправление: ${savedProgress.currentDirection === "right" ? "→ вправо" : "← влево"}\nСохранено: ${new Date(savedProgress.savedAt).toLocaleString("ru-RU")}`,
-      confirmText: "Восстановить и запустить",
-      cancelText: "Отмена",
-      onConfirm: async () => {
-        try {
-          setHttpServer((prev) => ({
-            ...prev,
-            running: true,
-            currentRow: savedProgress.currentRow,
-            currentDirection: savedProgress.currentDirection,
-            maxSentRow: savedProgress.maxSentRow,
-            totalRows: savedProgress.totalRows,
-            progressPercent: Math.round(
-              (savedProgress.currentRow / savedProgress.totalRows) * 100,
-            ),
-            serverIp: computerIp,
-          }));
+  };
 
-          if (patternData) {
-            drawPatternPreview(
-              patternData.rows,
-              patternData.width,
-              patternData.height,
-              savedProgress.currentRow,
-              savedProgress.currentDirection,
-            );
-          }
+   const restoreProgress = useCallback( async ()  =>  {
+  if (!savedProgress) return;
+  try {
+    // 1. Останавливаем старый сервер
+    await invoke("stop_esp32_http_server").catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
-          // Сначала останавливаем старый сервер
-          await invoke("stop_esp32_http_server").catch(() => {});
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          const result = await invoke("start_esp32_http_server", {
-            patternRows: patternData.rows,
-            patternWidth: patternData.width,
-            patternHeight: patternData.height,
-            chunkSize: 4,
-            port: 6666,
-          });
-
-          await invoke("restore_knitting_progress", {
-            projectId: parseInt(projectId),
-            currentRow: savedProgress.currentRow,
-            currentDirection: savedProgress.currentDirection,
-            maxSentRow: savedProgress.maxSentRow,
-          });
-
-          startStatusPolling();
-          addToast(
-            `Прогресс восстановлен! Ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`,
-            "success",
-            5000,
-          );
-          setShowRestorePrompt(false);
-        } catch (error) {
-          console.error("Ошибка восстановления прогресса:", error);
-          showAlert(
-            `Ошибка восстановления: ${error.message || error}`,
-            "error",
-          );
-        }
-      },
+    // 2. Запускаем новый сервер (создаст состояние с restart_flag=false)
+    await invoke("start_esp32_http_server", {
+      patternRows: patternData.rows,
+      patternWidth: patternData.width,
+      patternHeight: patternData.height,
+      chunkSize: 4,
+      port: 6666,
     });
-  }, [
-    savedProgress,
-    patternData,
-    drawPatternPreview,
-    addToast,
-    showAlert,
-    showConfirm,
-    computerIp,
-    projectId,
-  ]);
 
-  const deleteSavedProgress = useCallback(() => {
+    // 3. ✅ Явно сбрасываем флаг (на случай, если он где-то остался true)
+    await invoke("clear_esp_restart_signal").catch((e) => console.log(e));
+
+    // 4. Сообщаем серверу текущий прогресс (для отображения в GUI)
+    await invoke("restore_knitting_progress", {
+      projectId: parseInt(projectId),
+      currentRow: savedProgress.currentRow,
+      currentDirection: savedProgress.currentDirection,
+    });
+
+    // 5. Обновляем UI
+    setHttpServer((prev) => ({
+      ...prev,
+      running: true,
+      currentRow: savedProgress.currentRow,
+      currentDirection: savedProgress.currentDirection,
+      totalRows: savedProgress.totalRows,
+      serverIp: computerIp,
+    }));
+
+    if (patternData) {
+      drawPatternPreview(
+        patternData.rows,
+        patternData.width,
+        patternData.height,
+        savedProgress.currentRow,
+        savedProgress.currentDirection,
+      );
+    }
+
+    startStatusPolling();
+    addToast(
+      `▶️ Вязание продолжено с ряда ${savedProgress.currentRow}`,
+      "success",
+      4000,
+    );
+  } catch (error) {
+    console.error("Ошибка восстановления:", error);
+    showAlert(`Ошибка: ${error.message || error}`, "error");
+  }
+}, [
+  savedProgress,
+  patternData,
+  drawPatternPreview,
+  addToast,
+  showAlert,
+  computerIp,
+  projectId,
+]);
+
+  const deleteSavedProgress = useCallback(async () => {
     const key = getProgressKey();
     localStorage.removeItem(key);
     setSavedProgress(null);
     setShowRestorePrompt(false);
-    addToast("🗑️ Сохранённый прогресс удалён", "info", 3000);
-  }, [getProgressKey, addToast]);
-
-  const resetProgress = useCallback(() => {
-    if (!httpServer.running) {
-      showAlert("Сначала запустите вязание", "warning");
-      return;
-    }
-    showConfirm({
-      title: "⚠️ Сбросить прогресс вязания?",
-      message: `Это отправит ESP32 команду сброса и начнёт вязание сначала!\n\nТекущий ряд: ${httpServer.currentRow}/${httpServer.totalRows}\n\nВсе несохранённые данные будут потеряны.`,
-      confirmText: "Сбросить",
-      cancelText: "Отмена",
-      onConfirm: async () => {
-        try {
-          await invoke("reset_knitting_progress");
-          setHttpServer((prev) => ({
-            ...prev,
-            currentRow: 0,
-            currentDirection: "right",
-            maxSentRow: 0,
-            progressPercent: 0,
-            chunksSent: 0,
-          }));
-          // После reset_knitting_progress добавь:
-          await invoke("clear_solenoid_hits").catch(() => {});
-          setSolenoidHits([]);
-          setHitStats({
-            total: 0,
-            correct: 0,
-            misses: 0,
-            false_positives: 0,
-            accuracy_pct: 100,
-          });
-          const key = getProgressKey();
-          localStorage.removeItem(key);
-          setSavedProgress(null);
-          try {
+    try {
             await invoke("send_esp_restart_signal");
           } catch (e) {
             console.log("ESP restart signal not sent:", e);
           }
+    addToast("🗑️ Сохранённый прогресс удалён", "info", 3000);
+  }, [getProgressKey, addToast]);
+
+  const pauseKnitting = useCallback( async () => {
+    if (!httpServer.running) return;
+
+    saveProgress(); // Сохраняем текущий ряд в localStorage
+    await invoke("stop_esp32_http_server");
+    stopStatusPolling();
+
+    setHttpServer((prev) => ({ ...prev, running: false }));
+    addToast("⏸️ Вязание приостановлено. Прогресс сохранён.", "info", 4000);
+  }, [httpServer.running, saveProgress, stopStatusPolling, addToast]);
+
+  const resetProgress = useCallback(async () => {
+    if (!httpServer.running) {
+      showAlert("Сначала запустите вязание", "warning");
+      return;
+    }
+    try {
+            await invoke("send_esp_restart_signal");
+          } catch (e) {
+            console.log("ESP restart signal not sent:", e);
+          }
+   
+        try {
+          await invoke("reset_knitting_progress");
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const key = getProgressKey();
+          localStorage.removeItem(key);
+          setSavedProgress(null);
+          
           if (patternData) {
             drawPatternPreview(
               patternData.rows,
@@ -469,12 +434,20 @@ export default function KnittingTab({
             );
           }
           addToast("Прогресс сброшен! Начинаем сначала.", "warning", 5000);
+         await invoke("stop_esp32_http_server").catch(() => {});
+         setHttpServer((prev) => ({
+      ...prev,
+      running: false,
+      currentRow: 0,
+      currentDirection: "right",
+      totalRows: 0,
+      serverIp: computerIp,
+    }));
         } catch (error) {
           console.error("Ошибка сброса прогресса:", error);
           showAlert(`Ошибка сброса: ${error.message || error}`, "error");
         }
-      },
-    });
+      
   }, [
     httpServer,
     patternData,
@@ -744,7 +717,11 @@ export default function KnittingTab({
         8000,
       );
     } else {
-      addToast(`📐 Датчики: выставьте на ${kslWidth<=0?patternData.width:kslWidth} петель`, "info", 5000);
+      addToast(
+        `📐 Датчики: выставьте на ${kslWidth <= 0 ? patternData.width : kslWidth} петель`,
+        "info",
+        5000,
+      );
     }
 
     // 4. Подтверждение запуска
@@ -753,27 +730,21 @@ export default function KnittingTab({
         "Убедитесь, что:\n" +
         "• ESP32 включен и подключён к WiFi\n" +
         `• IP адрес ESP32 настроен на: ${computerIp}\n` +
-        `• Датчики (KSL) выставлены на ${kslWidth<=0?patternData.width:kslWidth} игл\n` +
+        `• Датчики (KSL) выставлены на ${kslWidth <= 0 ? patternData.width : kslWidth} игл\n` +
         "• Нить заправлена в машину\n\n" +
         "Нажмите OK для запуска или Отмена для отмены.",
     );
     if (!confirmStart) return;
 
     try {
-      setHttpServer((prev) => ({
-        ...prev,
-        currentRow: 0,
-        progressPercent: 0,
-        chunksSent: 0,
-        connected: false,
-      }));
+      // 1. Явно говорим ESP32: "Это новый старт, сбросься!"
+      await invoke("send_esp_restart_signal").catch((e) => console.log(e));
 
-      // 5. ВСЕГДА останавливаем старый сервер перед запуском нового
+      // 2. Останавливаем старый сервер, если он был
       await invoke("stop_esp32_http_server").catch(() => {});
-      // Даём время на освобождение порта
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // 6. Запускаем новый сервер с расширенным паттерном
+      // 3. Запускаем новый сервер
       const result = await invoke("start_esp32_http_server", {
         patternRows: finalPattern.rows,
         patternWidth: finalPattern.width,
@@ -782,15 +753,12 @@ export default function KnittingTab({
         port: 6666,
       });
 
-      console.log("HTTP server started:", result);
-
       setHttpServer((prev) => ({
         ...prev,
         running: true,
         serverIp: computerIp,
         totalRows: finalPattern.height,
       }));
-
       startStatusPolling();
     } catch (err) {
       console.error("Failed to start HTTP server:", err);
@@ -804,7 +772,6 @@ export default function KnittingTab({
       await invoke("stop_esp32_http_server");
       setHttpServer((prev) => ({ ...prev, running: false }));
       stopStatusPolling();
-      stopSolenoidPolling(); 
       hasShownCompletionNotification.current = false;
     } catch (err) {
       console.error("Failed to stop server:", err);
@@ -867,7 +834,6 @@ export default function KnittingTab({
 
         if (total > 0) {
           const progress = Math.round((current / total) * 100);
-          const chunksSent = Math.ceil(maxSentRow / 4);
           const connected = isEspConnected;
 
           if (isEspConnected && !hasPlayedConnectSound.current) {
@@ -883,7 +849,6 @@ export default function KnittingTab({
             currentDirection: direction,
             totalRows: total,
             progressPercent: progress,
-            chunksSent,
             connected,
             isEspConnected,
             maxSentRow,
@@ -919,12 +884,7 @@ export default function KnittingTab({
     }, 1000);
   };
 
-  const stopStatusPolling = () => {
-    if (statusIntervalRef.current) {
-      clearInterval(statusIntervalRef.current);
-      statusIntervalRef.current = null;
-    }
-  };
+  
 
   useEffect(() => {
     return () => {
@@ -1008,116 +968,6 @@ export default function KnittingTab({
     },
     [patternColors],
   );
-
-  // Рисуем клеточную доску с фактическими срабатываниями
-  const drawTestGrid = useCallback((hits, width, height) => {
-    const canvas = testCanvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    const maxCanvasSize = 500;
-    const cellSize = Math.max(
-      2,
-      Math.floor(maxCanvasSize / Math.max(width, height)),
-    );
-
-    canvas.width = Math.min(width * cellSize, maxCanvasSize);
-    canvas.height = Math.min(height * cellSize, maxCanvasSize);
-
-    const visibleWidth = Math.floor(canvas.width / cellSize);
-    const visibleHeight = Math.floor(canvas.height / cellSize);
-    const startX = Math.max(0, Math.floor((width - visibleWidth) / 2));
-    const startY = Math.max(0, Math.floor((height - visibleHeight) / 2));
-
-    // Фон
-    ctx.fillStyle = "#1a1a1a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Индекс хитов для быстрого доступа: key "row:needle" → hit
-    const hitMap = new Map();
-    for (const h of hits) {
-      hitMap.set(`${h.row}:${h.needle}`, h);
-    }
-
-    // Рисуем клетки (вертикальный флип, как в основном preview)
-    for (let y = 0; y < visibleHeight && startY + y < height; y++) {
-      const visualY = height - 1 - (startY + y);
-      for (let x = 0; x < visibleWidth && startX + x < width; x++) {
-        const pixelIndex = startX + x;
-        const hit = hitMap.get(`${visualY}:${pixelIndex}`);
-
-        if (!hit) {
-          // Ещё не провязано — серая клетка
-          ctx.fillStyle = "#2a2a2a";
-        } else if (hit.miss) {
-          // Пропуск — БЕЛЫЙ (должен был, но нет)
-          ctx.fillStyle = "#ffffff";
-        } else if (hit.false_pos) {
-          // Ложное срабатывание — КРАСНЫЙ
-          ctx.fillStyle = "#ef4444";
-        } else {
-          // Верное — ЗЕЛЁНЫЙ
-          ctx.fillStyle = "#22c55e";
-        }
-
-        ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
-      }
-    }
-  }, []);
-
-  // Опрашиваем сервер о хитах
-  const startSolenoidPolling = useCallback(() => {
-    if (solenoidIntervalRef.current) return;
-
-    solenoidIntervalRef.current = setInterval(async () => {
-      try {
-        // Читаем напрямую из Rust — никакого HTTP!
-        const data = await invoke("get_solenoid_hits_data");
-        console.log(data);
-        setSolenoidHits(data.hits || []);
-        setHitStats(
-          data.stats || {
-            total: 0,
-            correct: 0,
-            misses: 0,
-            false_positives: 0,
-            accuracy_pct: 100,
-          },
-        );
-
-        // Перерисовываем canvas
-        if (patternData && data.hits && data.hits.length > 0) {
-          drawTestGrid(data.hits, patternData.width, patternData.height);
-        }
-      } catch (e) {
-        console.log("Solenoid hits poll error:", e);
-      }
-    }, 1500);
-  }, [patternData, drawTestGrid]);
-
-  const stopSolenoidPolling = () => {
-    if (solenoidIntervalRef.current) {
-      clearInterval(solenoidIntervalRef.current);
-      solenoidIntervalRef.current = null;
-    }
-  };
-
-  // Запуск/остановка теста при открытии панели
-  useEffect(() => {
-    if (showTestPanel && httpServer.running) {
-      startSolenoidPolling();
-    } else {
-      stopSolenoidPolling();
-    }
-    return () => stopSolenoidPolling();
-  }, [showTestPanel, httpServer.running, startSolenoidPolling]);
-
-  // Остановка вместе с сервером
-  useEffect(() => {
-    if (!httpServer.running) {
-      stopSolenoidPolling();
-    }
-  }, [httpServer.running]);
 
   return (
     <div className="knitting-tab">
@@ -1227,77 +1077,35 @@ export default function KnittingTab({
           </div>
         )}
 
-        {httpServer.running && (
-          <>
-            <button
-              className="btn-save-progress"
-              onClick={saveProgress}
-              type="button"
-              title="Сохранить текущий прогресс вязания"
-            >
-              💾 Сохранить прогресс
-            </button>
-            <button
-              className="btn-reset-progress"
-              onClick={resetProgress}
-              type="button"
-              title="Сбросить прогресс и начать сначала"
-            >
-              ⚠️ Сбросить прогресс
-            </button>
-          </>
-        )}
+        <div className="knitting-controls">
+  {!httpServer.running && !savedProgress && (
+    <button className="btn-start" onClick={startHttpServer}>
+      ▶️ НАЧАТЬ ВЯЗАНИЕ
+    </button>
+  )}
 
-        {savedProgress && !httpServer.running && (
-          <>
-            <button
-              className="btn-restore-progress"
-              onClick={restoreProgress}
-              type="button"
-              title={`Восстановить прогресс: ряд ${savedProgress.currentRow}/${savedProgress.totalRows}`}
-            >
-              🔄 Восстановить прогресс
-            </button>
-            <button
-              className="btn-delete-progress"
-              onClick={deleteSavedProgress}
-              type="button"
-              title="Удалить сохранённый прогресс"
-            >
-              🗑️
-            </button>
-          </>
-        )}
-        {httpServer.running && (
-          <button
-            className="btn-test-toggle"
-            onClick={() => setShowTestPanel(!showTestPanel)}
-            type="button"
-            title="Показать/скрыть тест на соответствие DOB"
-          >
-            🧪 Тест {showTestPanel ? "▼" : "▶"}
-          </button>
-        )}
-        {httpServer.running ? (
-          <button className="btn-stop" onClick={stopHttpServer}>
-            ⏹️ Завершить
-          </button>
-        ) : (
-          <button
-            className="btn-start-knitting"
-            onClick={() => {
-              if (!patternData) {
-                addToast("Сначала выберите или создайте узор!", "error", 4000);
-                return;
-              }
-              startHttpServer();
-            }}
-            title={!patternData ? "Сначала выберите узор" : "Начать вязание"}
-          >
-            ▶️ НАЧАТЬ ВЯЗАНИЕ
-          </button>
-        )}
+  {!httpServer.running && savedProgress && (
+    <>
+      <button className="btn-resume" onClick={restoreProgress} style={{ backgroundColor: "#22c55e", color: "white", marginRight: "8px" }}>
+        ▶️ ПРОДОЛЖИТЬ
+      </button>
+      <button className="btn-reset" onClick={deleteSavedProgress} style={{ backgroundColor: "#ef4444", color: "white" }}>
+        ⚠️ СБРОСИТЬ
+      </button>
+    </>
+  )}
 
+  {httpServer.running && (
+    <>
+      <button className="btn-pause" onClick={pauseKnitting} style={{ backgroundColor: "#f59e0b", color: "white", marginRight: "8px" }}>
+        ⏸️ ПАУЗА
+      </button>
+      <button className="btn-finish" onClick={resetProgress} style={{ backgroundColor: "#ef4444", color: "white" }}>
+        ⏹️ ЗАВЕРШИТЬ
+      </button>
+    </>
+  )}
+</div>
         {computerIp && (
           <div className="ip-display">
             📡 IP сервера: <code>{httpServer.serverIp || computerIp}:6666</code>
@@ -1446,8 +1254,7 @@ export default function KnittingTab({
           <h4>Готово к вязанию!</h4>
           <p>
             <strong>Узор загружен:</strong> {patternData.width}×
-            {patternData.height} ({Math.ceil(patternData.height / 4)} чанков по
-            4 ряда)
+            {patternData.height}
           </p>
           <div className="steps">
             <div className="step">
@@ -1483,10 +1290,6 @@ export default function KnittingTab({
             </span>
             <span>
               📄 Формат: <strong>Бинарный (0/1)</strong>
-            </span>
-            <span>
-              🧶 Чанков: <strong>{Math.ceil(patternData.height / 4)}</strong>{" "}
-              (по 4 ряда)
             </span>
             <span>
               📏 Ширина полотна: <strong>{kslWidth} игл</strong> (ручной ввод)
@@ -1526,36 +1329,6 @@ export default function KnittingTab({
               />
             </div>
           </div>
-          <div className="chunk-progress">
-            <h5>📦 Отправленные чанки:</h5>
-            <div className="chunk-grid">
-              {Array.from(
-                { length: Math.ceil(httpServer.totalRows / 4) },
-                (_, i) => {
-                  const chunkStart = i * 4;
-                  const chunkEnd = Math.min((i + 1) * 4, httpServer.totalRows);
-                  const isSent = chunkStart < httpServer.currentRow;
-                  const isCurrent =
-                    chunkStart >= httpServer.currentRow &&
-                    chunkStart < httpServer.currentRow + 4;
-                  return (
-                    <div
-                      key={i}
-                      className={`chunk-item ${isSent ? "sent" : ""} ${isCurrent ? "current" : ""}`}
-                      title={`Чанк ${i + 1}: ряды ${chunkStart}-${chunkEnd - 1}`}
-                    >
-                      <span className="chunk-number">{i + 1}</span>
-                      <span className="chunk-rows">
-                        {chunkStart}-{chunkEnd - 1}
-                      </span>
-                      {isSent && <span className="chunk-status">✓</span>}
-                      {isCurrent && <span className="chunk-status">⟳</span>}
-                    </div>
-                  );
-                },
-              )}
-            </div>
-          </div>
           <div className="connection-info">
             <p>
               <strong>Настройте ESP32:</strong>
@@ -1568,89 +1341,6 @@ export default function KnittingTab({
               💡 Подключите ESP32 и компьютер к одной WiFi сети
             </p>
           </div>
-        </div>
-      )}
-      {/* === ПАНЕЛЬ ТЕСТА НА СООТВЕТСТВИЕ === */}
-      {showTestPanel && patternData && (
-        <div className="solenoid-test-panel">
-          <div className="test-header">
-            <h4>🧪 Тест на соответствие DOB</h4>
-            <button
-              className="btn-close-test"
-              onClick={() => setShowTestPanel(false)}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Статистика */}
-          <div className="test-stats">
-            <div className="stat-item stat-correct">
-              <span className="stat-dot green"></span>
-              <span>
-                Верно: <strong>{hitStats.correct}</strong>
-              </span>
-            </div>
-            <div className="stat-item stat-miss">
-              <span className="stat-dot white"></span>
-              <span>
-                Пропуски: <strong>{hitStats.misses}</strong>
-              </span>
-            </div>
-            <div className="stat-item stat-false">
-              <span className="stat-dot red"></span>
-              <span>
-                Лишние: <strong>{hitStats.false_positives}</strong>
-              </span>
-            </div>
-            <div className="stat-item stat-total">
-              <span>
-                Всего: <strong>{hitStats.total}</strong>
-              </span>
-            </div>
-            <div className="stat-item stat-accuracy">
-              <span>
-                Точность: <strong>{hitStats.accuracy_pct}%</strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Легенда */}
-          <div className="test-legend">
-            <span>
-              <span className="legend-box green"></span> Верное срабатывание
-            </span>
-            <span>
-              <span className="legend-box red"></span> Лишнее (сработал зря)
-            </span>
-            <span>
-              <span className="legend-box white"></span> Пропуск (должен был)
-            </span>
-            <span>
-              <span className="legend-box gray"></span> Не провязано
-            </span>
-          </div>
-
-          {/* Canvas */}
-          <div className="test-canvas-wrapper">
-            <canvas ref={testCanvasRef} className="test-canvas" />
-          </div>
-
-          {hitStats.total === 0 && (
-            <p className="test-hint">Ожидание данных от ESP32... Вяжите!</p>
-          )}
-
-          {hitStats.accuracy_pct < 90 && hitStats.total > 50 && (
-            <div className="test-warning">
-              ⚠️ Точность ниже 90%. Проверьте:
-              <ul>
-                <li>Дребезг контактов KSL/CCP</li>
-                <li>Полярность DOB (LOW/HIGH)</li>
-                <li>Скорость каретки</li>
-                <li>Синхронизацию ND1</li>
-              </ul>
-            </div>
-          )}
         </div>
       )}
       {patternData && (

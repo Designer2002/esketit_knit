@@ -8,21 +8,23 @@ import { BlueprintProvider } from "./context/BlueprintContext";
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Start />} />
-        <Route path="/create_project" element={<CreateProject />} />
-        <Route path="/open_project" element={<OpenProject />}/>
-        <Route
-          path="/editor/:projectId"
-          element={
-            <BlueprintProvider>
-              <ProjectEditor />
-            </BlueprintProvider>
-          }
-        />
-      </Routes>
-    </Router>
+    <I18nProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Start />} />
+          <Route path="/create_project" element={<CreateProject />} />
+          <Route path="/open_project" element={<OpenProject />} />
+          <Route
+            path="/editor/:projectId"
+            element={
+              <BlueprintProvider>
+                <ProjectEditor />
+              </BlueprintProvider>
+            }
+          />
+        </Routes>
+      </Router>
+    </I18nProvider>
   );
 }
 
